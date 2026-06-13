@@ -160,14 +160,43 @@ void SkillCard::updateData()
     }
     m_tagsLayout->addStretch();
 
-    // Agent 按钮 — 显示所有已配置的 agent
+    // Agent 按钮 — 只显示已启用的 agent
     clearLayoutWidgets(m_agentsLayout);
     for (const AgentInfo &agent : m_agentList) {
+        if (!agent.enabled) continue;
         QPushButton *btn = new QPushButton(m_agentsWidget);
-        btn->setFixedSize(22, 22);
+        btn->setFixedSize(26, 26);
         btn->setCheckable(true);
         btn->setChecked(m_enabledAgentIds.contains(agent.id));
-        btn->setText(agent.name.left(1).toUpper());
+
+        // 每个 agent 使用固定的颜色和首字母
+        QString initial;
+        if (agent.name.contains("Claude", Qt::CaseInsensitive)) {
+            initial = "CL";
+        } else if (agent.name.contains("Codex", Qt::CaseInsensitive)) {
+            initial = "CO";
+        } else {
+            initial = agent.name.left(1).toUpper();
+        }
+        QString bgColor, textColor;
+        if (agent.name.contains("WorkBuddy", Qt::CaseInsensitive)) {
+            bgColor = "#4caf50"; textColor = "white";
+        } else if (agent.name.contains("Claude", Qt::CaseInsensitive)) {
+            bgColor = "#d97706"; textColor = "white";
+        } else if (agent.name.contains("Codex", Qt::CaseInsensitive)) {
+            bgColor = "#10b981"; textColor = "white";
+        } else if (agent.name.contains("Mimo", Qt::CaseInsensitive)) {
+            bgColor = "#3b82f6"; textColor = "white";
+        } else if (agent.name.contains("Trae", Qt::CaseInsensitive)) {
+            bgColor = "#8b5cf6"; textColor = "white";
+        } else if (agent.name.contains("OpenCode", Qt::CaseInsensitive)) {
+            bgColor = "#06b6d4"; textColor = "white";
+        } else {
+            bgColor = "#6b7280"; textColor = "white";
+        }
+
+        btn->setText(initial);
+
         QString tip;
         if (agent.path.isEmpty()) {
             tip = QString("%1（路径未配置）").arg(agent.name);
@@ -177,11 +206,14 @@ void SkillCard::updateData()
             tip = QString("%1 (%2)").arg(agent.name, agent.path);
         }
         btn->setToolTip(tip);
-        btn->setStyleSheet(
-            "QPushButton { border: 1px solid #ccc; border-radius: 11px; "
-            "background-color: #e0e0e0; font-size: 9px; }"
-            "QPushButton:checked { background-color: #4a90d9; color: white; }"
-            "QPushButton:disabled { background-color: #f0f0f0; color: #aaa; }");
+
+        // 未选中时用浅色背景，选中时用 agent 主题色
+        btn->setStyleSheet(QString(
+            "QPushButton { border: none; border-radius: 13px; "
+            "background-color: #e8e8e8; color: #999; font-size: 10px; font-weight: bold; }"
+            "QPushButton:checked { background-color: %1; color: %2; }"
+            "QPushButton:hover { border: 1px solid %1; }"
+        ).arg(bgColor, textColor));
         connect(btn, &QPushButton::toggled, this, [this, agent](bool checked) {
             emit agentToggled(m_skillId, agent.id, checked);
         });

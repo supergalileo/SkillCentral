@@ -101,6 +101,12 @@ void SettingsDialog::onAddAgent()
             }
         }
 
+        // 有路径才允许启用
+        if (enabled && (path.isEmpty() || !QDir(path).exists())) {
+            QMessageBox::warning(this, "警告", "路径无效或未设置，无法启用。请先设置有效路径。");
+            enabled = false;
+        }
+
         int id = m_dbManager->addAgent(name, path, enabled, icon);
         if (id > 0) {
             refreshAgents();
@@ -143,6 +149,12 @@ void SettingsDialog::onEditAgent()
             }
         }
 
+        // 有路径才允许启用
+        if (enabled && (path.isEmpty() || !QDir(path).exists())) {
+            QMessageBox::warning(this, "警告", "路径无效或未设置，无法启用。请先设置有效路径。");
+            enabled = false;
+        }
+
         QVariantMap fields;
         fields["name"] = name;
         fields["path"] = path;
@@ -172,6 +184,16 @@ void SettingsDialog::onToggleAgent()
     QString status = m_agentTable->item(row, 2)->text();
 
     bool newEnabled = (status == "禁用");
+
+    // 启用时检查路径是否有效
+    if (newEnabled) {
+        AgentInfo agent = m_dbManager->getAgent(agentId);
+        if (agent.path.isEmpty() || !QDir(agent.path).exists()) {
+            QMessageBox::warning(this, "警告", "该 Agent 路径未设置或无效，无法启用。请先编辑设置有效路径。");
+            return;
+        }
+    }
+
     if (m_dbManager->setAgentEnabled(agentId, newEnabled)) {
         refreshAgents();
         emit agentsChanged();

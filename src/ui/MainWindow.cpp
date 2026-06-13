@@ -554,9 +554,10 @@ void MainWindow::onRequestSettings()
     }
     SettingsDialog dialog(m_dbManager, m_agentManager, this);
 
-    // 连接 agentsChanged 信号以刷新 agent 列表
+    // 连接 agentsChanged 信号以刷新 agent 列表和卡片
     connect(&dialog, &SettingsDialog::agentsChanged, this, [this]() {
         loadAgents();
+        loadSkills();
     });
 
     // 连接主题切换信号

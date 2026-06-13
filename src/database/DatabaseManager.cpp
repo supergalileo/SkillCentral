@@ -79,7 +79,7 @@ bool DatabaseManager::initializeDatabase()
         }
 
         if (!query.next()) {
-            // 预设 agent 默认禁用，避免自动扫描系统内置 skills
+            // 预设 agent 默认禁用
             query.prepare("INSERT INTO agents (name, path, enabled) VALUES (?, ?, 0)");
             query.addBindValue(agent.first);
             query.addBindValue(agent.second);
@@ -87,16 +87,8 @@ bool DatabaseManager::initializeDatabase()
             if (!query.exec()) {
                 emit databaseError("Failed to insert preset agent: " + query.lastError().text());
             }
-        } else {
-            // 已存在的预设 agent：强制禁用，防止扫描系统内置 skills
-            int agentId = query.value(0).toInt();
-            QSqlQuery updateQuery(m_db);
-            updateQuery.prepare("UPDATE agents SET enabled = 0 WHERE id = ?");
-            updateQuery.addBindValue(agentId);
-            if (!updateQuery.exec()) {
-                emit databaseError("Failed to disable preset agent: " + updateQuery.lastError().text());
-            }
         }
+        // 已存在的 agent 不修改，保留用户设置的启用状态
     }
 
     m_initialized = true;
