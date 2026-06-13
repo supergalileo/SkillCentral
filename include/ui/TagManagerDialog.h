@@ -25,6 +25,7 @@ private slots:
     void onRenameTag();
     void onMergeTags();
     void onDeleteTag();
+    void onClearAllTags();
     void onSelectionChanged();
     void onContextMenu(const QPoint &pos);
 
@@ -39,6 +40,7 @@ private:
     QPushButton *m_renameButton;
     QPushButton *m_mergeButton;
     QPushButton *m_deleteButton;
+    QPushButton *m_clearAllButton;
     QPushButton *m_closeButton;
 };
 

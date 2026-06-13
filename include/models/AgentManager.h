@@ -7,6 +7,7 @@
 #include <QVector>
 
 class DatabaseManager;
+class SkillManager;
 
 struct AgentInfo;
 
@@ -14,7 +15,7 @@ class AgentManager : public QObject
 {
     Q_OBJECT
 public:
-    explicit AgentManager(DatabaseManager *dbManager, QObject *parent = nullptr);
+    explicit AgentManager(DatabaseManager *dbManager, SkillManager *skillManager, QObject *parent = nullptr);
 
     // Agent CRUD（委托给 DatabaseManager，加日志）
     int addAgent(const QString &name, const QString &path, bool enabled = true, const QString &icon = "");
@@ -53,6 +54,7 @@ signals:
 
 private:
     DatabaseManager *m_dbManager;
+    SkillManager *m_skillManager;
     QString m_libraryPath;
 
     bool copyDirectory(const QString &sourcePath, const QString &targetPath);

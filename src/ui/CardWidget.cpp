@@ -31,9 +31,21 @@ void CardWidget::setSkills(const QVector<SkillInfo> &skills)
         connect(card, &SkillCard::checkBoxToggled, this, &CardWidget::onCheckBoxToggled);
         connect(card, &SkillCard::frequencyClicked, this, &CardWidget::frequencyChanged);
         connect(card, &SkillCard::agentToggled, this, &CardWidget::agentToggled);
+        connect(card, &SkillCard::tagAddRequested, this, &CardWidget::tagAddRequested);
+        connect(card, &SkillCard::tagRemoveRequested, this, &CardWidget::tagRemoveRequested);
+        connect(card, &SkillCard::deleteRequested, this, &CardWidget::deleteRequested);
+        card->setAgentList(m_agentList);
         m_cards.append(card);
     }
     filter(m_filterText, m_filterTags);
+}
+
+void CardWidget::setAgentList(const QVector<AgentInfo> &agents)
+{
+    m_agentList = agents;
+    for (SkillCard *card : m_cards) {
+        card->setAgentList(m_agentList);
+    }
 }
 
 void CardWidget::addSkill(const SkillInfo &skill)
@@ -45,6 +57,10 @@ void CardWidget::addSkill(const SkillInfo &skill)
     connect(card, &SkillCard::checkBoxToggled, this, &CardWidget::onCheckBoxToggled);
     connect(card, &SkillCard::frequencyClicked, this, &CardWidget::frequencyChanged);
     connect(card, &SkillCard::agentToggled, this, &CardWidget::agentToggled);
+    connect(card, &SkillCard::tagAddRequested, this, &CardWidget::tagAddRequested);
+    connect(card, &SkillCard::tagRemoveRequested, this, &CardWidget::tagRemoveRequested);
+    connect(card, &SkillCard::deleteRequested, this, &CardWidget::deleteRequested);
+    card->setAgentList(m_agentList);
     m_cards.append(card);
     filter(m_filterText, m_filterTags);
 }
@@ -58,6 +74,24 @@ void CardWidget::clearSkills()
     }
     m_cards.clear();
     m_allSkills.clear();
+}
+
+void CardWidget::updateSkill(int skillId, const SkillInfo &newSkill)
+{
+    // 更新内存数据
+    for (int i = 0; i < m_allSkills.size(); ++i) {
+        if (m_allSkills[i].id == skillId) {
+            m_allSkills[i] = newSkill;
+            break;
+        }
+    }
+    // 更新对应卡片（不重建、不重排）
+    for (SkillCard *card : m_cards) {
+        if (card->getSkillId() == skillId) {
+            card->updateSkillData(newSkill);
+            break;
+        }
+    }
 }
 
 void CardWidget::setCardSize(bool large)
@@ -149,7 +183,7 @@ void CardWidget::sortBy(const QString &criteria)
             [](const SkillInfo &a, const SkillInfo &b) {
                 return a.name.toLower() < b.name.toLower();
             });
-    } else if (criteria == "created") {
+    } else if (criteria == "createdAt") {
         std::sort(sorted.begin(), sorted.end(),
             [](const SkillInfo &a, const SkillInfo &b) {
                 return a.createdAt > b.createdAt;
@@ -228,7 +262,7 @@ void CardWidget::clearLayout()
 
 int CardWidget::calculateColumns() const
 {
-    int cardWidth = m_largeMode ? 262 : 132;
+    int cardWidth = m_largeMode ? 262 : 152;
     int availableWidth = width();
     if (availableWidth <= 0) availableWidth = 800;
     int cols = qMax(1, availableWidth / cardWidth);

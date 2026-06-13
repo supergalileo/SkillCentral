@@ -20,8 +20,11 @@
 SkillSidebar::SkillSidebar(QWidget *parent)
     : QWidget(parent)
     , m_dbManager(nullptr)
+    , m_agentManager(nullptr)
     , m_currentSkillId(-1)
     , m_isOpen(false)
+    , m_animation(nullptr)
+    , m_overlay(nullptr)
     , m_sidebarWidth(0)
 {
     setupUi();
@@ -49,12 +52,28 @@ void SkillSidebar::setAgentManager(AgentManager *agentManager)
 
 void SkillSidebar::loadSkill(int skillId)
 {
+    // 防重复加载：如果已经在显示同一个 skill，跳过
+    if (m_isOpen && m_currentSkillId == skillId) {
+        return;
+    }
+
+    // 如果侧边栏当前是打开的（切换不同 skill），先立即重置状态
+    if (m_isOpen) {
+        m_isOpen = false;
+        if (m_animation) {
+            m_animation->stop();
+        }
+        hideOverlay();
+        setFixedWidth(0);
+        hide();
+    }
+
     m_currentSkillId = skillId;
-    
+
     if (m_dbManager) {
         m_currentSkill = m_dbManager->getSkill(skillId);
     }
-    
+
     updateUi();
     open();
 }

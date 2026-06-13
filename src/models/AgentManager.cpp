@@ -1,15 +1,25 @@
 #include "models/AgentManager.h"
+#include "models/SkillManager.h"
 #include "database/DatabaseManager.h"
 #include <QDebug>
 #include <QDir>
+#include <QSet>
 #include <QFile>
 #include <QFileInfo>
 
-AgentManager::AgentManager(DatabaseManager *dbManager, QObject *parent)
-    : QObject(parent), m_dbManager(dbManager)
+AgentManager::AgentManager(DatabaseManager *dbManager, SkillManager *skillManager, QObject *parent)
+    : QObject(parent), m_dbManager(dbManager), m_skillManager(skillManager)
 {
     if (m_dbManager) {
         m_libraryPath = m_dbManager->getSetting("library_path", "D:/skillLibrary");
+    }
+
+    // 连接 SkillManager 的错误信号，输出到日志
+    if (m_skillManager) {
+        connect(m_skillManager, &SkillManager::errorOccurred,
+                this, [](const QString &msg) {
+                    qWarning() << "SkillManager error:" << msg;
+                });
     }
 }
 
@@ -243,7 +253,6 @@ bool AgentManager::scanAgentPath(int agentId)
 
     qInfo() << "Scanning agent path for agent:" << agentId;
 
-    // 获取 agent 信息
     AgentInfo agentInfo = m_dbManager->getAgent(agentId);
     if (agentInfo.id == -1) {
         qWarning() << "Agent not found:" << agentId;
@@ -251,33 +260,114 @@ bool AgentManager::scanAgentPath(int agentId)
         return false;
     }
 
-    if (!validateAgentPath(agentId)) {
-        emit errorOccurred("Agent path is invalid");
-        return false;
+    bool pathValid = validateAgentPath(agentId);
+
+    // 只有路径有效时才扫描目录
+    if (pathValid && m_skillManager) {
+        QDir agentDir(agentInfo.path);
+        QStringList subDirs = agentDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+
+        int current = 0;
+        int total = subDirs.size();
+
+        emit scanProgress(current, total, "Starting scan...");
+
+        for (const QString &subDir : subDirs) {
+            current++;
+            QString subDirPath = agentDir.filePath(subDir);
+
+            static const QSet<QString> skipPrefixes = {
+                ".", "_", "__pycache__", "node_modules",
+                ".venv", ".env", ".git", ".svn", "dist", "build"
+            };
+            bool shouldSkip = false;
+            for (const QString &prefix : skipPrefixes) {
+                if (subDir.startsWith(prefix)) {
+                    shouldSkip = true;
+                    break;
+                }
+            }
+            if (shouldSkip) {
+                qInfo() << "Skipping non-skill directory:" << subDir;
+                continue;
+            }
+
+            emit scanProgress(current, total, QString("Scanning: %1").arg(subDir));
+
+            QString skillMdPath = QDir::cleanPath(subDirPath + "/SKILL.md");
+            if (!QFileInfo::exists(skillMdPath)) {
+                continue;
+            }
+
+            QString skillName = SkillManager::parseName(skillMdPath);
+            if (skillName.isEmpty()) {
+                skillName = subDir;
+            }
+
+            QVector<SkillInfo> allSkills = m_dbManager->getAllSkills();
+            int existingSkillId = -1;
+            for (const SkillInfo &skill : allSkills) {
+                if (skill.name == skillName) {
+                    existingSkillId = skill.id;
+                    break;
+                }
+            }
+
+            if (existingSkillId == -1) {
+                qInfo() << "Skill not found in library, importing:" << skillName;
+                int newSkillId = m_skillManager->importFromFolder(subDirPath);
+                if (newSkillId != -1) {
+                    qInfo() << "Successfully imported skill:" << skillName << "ID:" << newSkillId;
+                    m_dbManager->enableSkillForAgent(newSkillId, agentId);
+                }
+            } else {
+                QVector<SkillInfo> allSkills2 = m_dbManager->getAllSkills();
+                QString existingPath;
+                for (const SkillInfo &s : allSkills2) {
+                    if (s.id == existingSkillId) {
+                        existingPath = s.path;
+                        break;
+                    }
+                }
+
+                if (!QDir(existingPath).exists()) {
+                    qInfo() << "Skill folder MISSING, re-importing:" << skillName;
+                    int newSkillId = m_skillManager->importFromFolder(subDirPath);
+                    if (newSkillId != -1) {
+                        m_dbManager->enableSkillForAgent(newSkillId, agentId);
+                    }
+                } else {
+                    QVector<int> enabledAgents = m_dbManager->getSkillEnabledAgents(existingSkillId);
+                    if (!enabledAgents.contains(agentId)) {
+                        qInfo() << "Enabling existing skill for agent:" << skillName;
+                        m_dbManager->enableSkillForAgent(existingSkillId, agentId);
+                    }
+                }
+            }
+        }
+
+        emit scanProgress(total, total, "Scan completed");
+    } else if (!pathValid) {
+        qInfo() << "Agent path invalid, only running reverse check:" << agentInfo.name;
     }
 
-    QDir agentDir(agentInfo.path);
-    QStringList subDirs = agentDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    // 反向检查：数据库中该 Agent 已启用的 skill，但目录中已不存在 → 禁用
+    // 此检查始终执行，无论路径是否有效
+    QVector<int> enabledSkillIds = m_dbManager->getAgentEnabledSkills(agentId);
+    for (int skillId : enabledSkillIds) {
+        SkillInfo skillInfo = m_dbManager->getSkill(skillId);
+        if (skillInfo.id == -1) continue;
 
-    int current = 0;
-    int total = subDirs.size();
+        // 通过 skill 名称构建 agent 目录下的路径
+        QString skillFolderName = QFileInfo(skillInfo.path).fileName();
+        QString agentSkillPath = QDir::cleanPath(agentInfo.path + "/" + skillFolderName);
 
-    emit scanProgress(current, total, "Starting scan...");
-
-    for (const QString &subDir : subDirs) {
-        current++;
-        QString subDirPath = agentDir.filePath(subDir);
-
-        emit scanProgress(current, total, QString("Scanning: %1").arg(subDir));
-
-        qInfo() << "Found directory:" << subDir;
-
-        // TODO: 检查是否在中 央库中存在
-        // TODO: 如果不存在，调用 SkillManager::importFromFolder 导入
-        // TODO: 如果在中央库存在但 skill_agents 表中没有记录，添加记录
+        if (agentInfo.path.isEmpty() || !QDir(agentSkillPath).exists()) {
+            qInfo() << "Skill not in agent dir, disabling:" << skillInfo.name << "from" << agentInfo.name;
+            m_dbManager->disableSkillForAgent(skillId, agentId);
+        }
     }
 
-    emit scanProgress(total, total, "Scan completed");
     qInfo() << "Scan completed for agent:" << agentId;
     return true;
 }

@@ -58,10 +58,10 @@ bool DatabaseManager::initializeDatabase()
         return false;
     }
 
-    // 插入预置 Agent 数据
+    // 插入预置 Agent 数据（path 留空，由用户手动配置）
     QVector<QPair<QString, QString>> presetAgents = {
-        {"WorkBuddy", "C:/Users/Dongmiao/.workbuddy/skills/"},
-        {"Claude Code", "~/.claude/skills/"},
+        {"WorkBuddy", ""},
+        {"Claude Code", ""},
         {"Codex", ""},
         {"MimoCode", ""},
         {"Trae", ""},
@@ -79,12 +79,22 @@ bool DatabaseManager::initializeDatabase()
         }
 
         if (!query.next()) {
-            query.prepare("INSERT INTO agents (name, path, enabled) VALUES (?, ?, 1)");
+            // 预设 agent 默认禁用，避免自动扫描系统内置 skills
+            query.prepare("INSERT INTO agents (name, path, enabled) VALUES (?, ?, 0)");
             query.addBindValue(agent.first);
             query.addBindValue(agent.second);
 
             if (!query.exec()) {
                 emit databaseError("Failed to insert preset agent: " + query.lastError().text());
+            }
+        } else {
+            // 已存在的预设 agent：强制禁用，防止扫描系统内置 skills
+            int agentId = query.value(0).toInt();
+            QSqlQuery updateQuery(m_db);
+            updateQuery.prepare("UPDATE agents SET enabled = 0 WHERE id = ?");
+            updateQuery.addBindValue(agentId);
+            if (!updateQuery.exec()) {
+                emit databaseError("Failed to disable preset agent: " + updateQuery.lastError().text());
             }
         }
     }
@@ -1085,4 +1095,38 @@ int DatabaseManager::getOrCreateTag(const QString &name)
     }
 
     return query.lastInsertId().toInt();
+}
+
+bool DatabaseManager::clearAllTags()
+{
+    if (!m_db.isOpen()) {
+        emit databaseError("Database not open");
+        return false;
+    }
+
+    if (!m_db.transaction()) {
+        emit databaseError("Failed to begin transaction");
+        return false;
+    }
+
+    QSqlQuery q1(m_db);
+    if (!q1.exec("DELETE FROM skill_tags")) {
+        m_db.rollback();
+        emit databaseError("Failed to clear skill_tags: " + q1.lastError().text());
+        return false;
+    }
+
+    QSqlQuery q2(m_db);
+    if (!q2.exec("DELETE FROM tags")) {
+        m_db.rollback();
+        emit databaseError("Failed to clear tags: " + q2.lastError().text());
+        return false;
+    }
+
+    if (!m_db.commit()) {
+        emit databaseError("Failed to commit transaction");
+        return false;
+    }
+
+    return true;
 }

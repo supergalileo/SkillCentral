@@ -16,6 +16,7 @@
 #include <QCloseEvent>
 #include "database/DatabaseManager.h"
 #include "ui/SkillSidebar.h"
+#include "models/SkillManager.h"
 
 class CardWidget;
 class SkillSidebar;
@@ -48,6 +49,9 @@ signals:
     void requestAddSkill();
     void requestBackup();
 
+public slots:
+    void applyTheme(const QString &theme);
+
 private slots:
     void onSearchTextChanged(const QString &text);
     void onTagClicked(const QString &tag);
@@ -69,7 +73,7 @@ private slots:
     void onAddSkillClicked();
     void onBackupClicked();
     void onFrequencyFilterClicked(QPushButton *btn);
-    void onAgentFilterClicked(QPushButton *btn);
+    void onRefreshClicked();
 
     // 侧边栏相关槽
     void onEditSkillRequested(int skillId);
@@ -77,8 +81,15 @@ private slots:
     void onExportSkillRequested(int skillId);
     void onSidebarClosed();
 
+    // 标签相关槽
+    void onCardTagAddRequested(int skillId);
+    void onCardTagRemoveRequested(int skillId, const QString &tag);
+    void onCardDeleteRequested(int skillId);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     void setupUi();
@@ -88,6 +99,7 @@ private:
 
     DatabaseManager *m_dbManager;
     AgentManager *m_agentManager;
+    SkillManager *m_skillManager;
     SkillSidebar *m_skillSidebar;
 
     // UI 组件
@@ -113,7 +125,6 @@ private:
     // 状态
     QStringList m_activeFilterTags;
     QVector<int> m_activeFilterFrequencies;
-    QVector<int> m_activeFilterAgentIds; // Agent 筛选
     bool m_largeMode;
     QVector<SkillInfo> m_allSkills;
     QStringList m_allTags;
@@ -122,8 +133,7 @@ private:
     // UI 组件指针
     QVector<QPushButton *> m_tagButtons;
     QVector<QPushButton *> m_freqButtons;
-    QVector<QPushButton *> m_agentFilterButtons; // Agent 筛选按钮
-    QHBoxLayout *m_agentFilterLayout; // Agent 筛选布局指针
+    QPushButton *m_refreshBtn;
 };
 
 #endif // MAINWINDOW_H

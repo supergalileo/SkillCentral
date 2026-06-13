@@ -3,7 +3,9 @@
 #include "ui/SkillCard.h"
 #include "ui/SkillSidebar.h"
 #include "ui/SettingsDialog.h"
+#include "ui/TagManagerDialog.h"
 #include "models/AgentManager.h"
+#include "models/SkillManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -17,17 +19,22 @@
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
+#include <QApplication>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_dbManager(nullptr)
     , m_agentManager(nullptr)
+    , m_skillManager(nullptr)
     , m_largeMode(true)
-    , m_agentFilterLayout(nullptr)
 {
     setupUi();
     setWindowTitle("SkillCentral");
     resize(1000, 700);
+    setAcceptDrops(true);
 }
 
 MainWindow::~MainWindow()
@@ -38,9 +45,14 @@ void MainWindow::setDatabaseManager(DatabaseManager *dbManager)
 {
     m_dbManager = dbManager;
 
-    // 创建 AgentManager
+    // 创建 SkillManager
+    if (!m_skillManager) {
+        m_skillManager = new SkillManager(m_dbManager, this);
+    }
+
+    // 创建 AgentManager（需要 SkillManager）
     if (!m_agentManager) {
-        m_agentManager = new AgentManager(m_dbManager, this);
+        m_agentManager = new AgentManager(m_dbManager, m_skillManager, this);
     }
 
     // 传给侧边栏
@@ -68,10 +80,19 @@ void MainWindow::setDatabaseManager(DatabaseManager *dbManager)
         if (autoScan) {
             QTimer::singleShot(500, this, [this]() {
                 if (m_agentManager) {
+                    qInfo() << "Startup scan starting...";
                     m_agentManager->scanAllAgents();
+                    qInfo() << "Startup scan done, reloading skills...";
+                    loadSkills();
                 }
             });
         }
+    }
+
+    // 应用已保存的主题
+    if (m_dbManager) {
+        QString theme = m_dbManager->getSetting("theme", "浅色");
+        applyTheme(theme == "深色" ? "dark" : "light");
     }
 }
 
@@ -155,6 +176,19 @@ void MainWindow::setupUi()
             this, &MainWindow::onSortChanged);
     toolbarLayout->addWidget(m_sortCombo);
 
+    toolbarLayout->addStretch();
+
+    // 刷新按钮
+    m_refreshBtn = new QPushButton("🔄 刷新", this);
+    m_refreshBtn->setStyleSheet(
+        "QPushButton { padding: 4px 12px; border: 1px solid #ccc; "
+        "border-radius: 4px; font-size: 12px; }"
+        "QPushButton:hover { background-color: #f0f0f0; }"
+    );
+    m_refreshBtn->setToolTip("重新扫描 agent 路径，同步 skill 到中央库");
+    connect(m_refreshBtn, &QPushButton::clicked, this, &MainWindow::onRefreshClicked);
+    toolbarLayout->addWidget(m_refreshBtn);
+
     mainLayout->addWidget(toolbarWidget);
 
     // ===== 频率筛选栏 =====
@@ -191,23 +225,6 @@ void MainWindow::setupUi()
     freqLayout->addStretch();
     mainLayout->addWidget(freqWidget);
 
-    // ===== Agent 筛选栏 =====
-    QWidget *agentFilterWidget = new QWidget(this);
-    agentFilterWidget->setStyleSheet("background-color: #f0f4ff; border-bottom: 1px solid #d0e0ff; padding: 6px;");
-    QHBoxLayout *agentFilterLayout = new QHBoxLayout(agentFilterWidget);
-    agentFilterLayout->setContentsMargins(8, 4, 8, 4);
-    agentFilterLayout->setSpacing(6);
-
-    QLabel *agentFilterLabel = new QLabel("Agent筛选：", agentFilterWidget);
-    agentFilterLabel->setStyleSheet("color: #666; font-size: 12px;");
-    agentFilterLayout->addWidget(agentFilterLabel);
-
-    agentFilterLayout->addStretch();
-    mainLayout->addWidget(agentFilterWidget);
-
-    // 存储布局指针，供 loadAgents() 使用
-    m_agentFilterLayout = agentFilterLayout;
-
     // ===== 卡片区域 =====
     m_cardScrollArea = new QScrollArea(this);
     m_cardScrollArea->setWidgetResizable(true);
@@ -223,6 +240,9 @@ void MainWindow::setupUi()
     connect(m_cardWidget, &CardWidget::selectionChanged, this, &MainWindow::onSelectionChanged);
     connect(m_cardWidget, &CardWidget::frequencyChanged, this, &MainWindow::onFrequencyChanged);
     connect(m_cardWidget, &CardWidget::agentToggled, this, &MainWindow::onAgentToggled);
+    connect(m_cardWidget, &CardWidget::tagAddRequested, this, &MainWindow::onCardTagAddRequested);
+    connect(m_cardWidget, &CardWidget::tagRemoveRequested, this, &MainWindow::onCardTagRemoveRequested);
+    connect(m_cardWidget, &CardWidget::deleteRequested, this, &MainWindow::onCardDeleteRequested);
 
     mainLayout->addWidget(m_cardScrollArea, 1);
 
@@ -245,9 +265,6 @@ void MainWindow::setupUi()
 
     setMenuBar(menuBarWidget);
 
-    // 使用测试数据
-    createTestData();
-    
     // 创建侧边栏
     m_skillSidebar = new SkillSidebar(this);
     m_skillSidebar->setDatabaseManager(m_dbManager);
@@ -297,8 +314,43 @@ void MainWindow::onBatchEnableClicked()
         QMessageBox::information(this, "提示", "请先选择 skill");
         return;
     }
-    // TODO: 实现批量启用
-    QMessageBox::information(this, "批量启用", QString("将启用 %1 个 skill").arg(ids.size()));
+
+    // 选择目标 Agent
+    QStringList agentNames;
+    QVector<int> agentIds;
+    for (const AgentInfo &agent : m_allAgents) {
+        if (agent.enabled && !agent.path.isEmpty() && QDir(agent.path).exists()) {
+            agentNames << agent.name;
+            agentIds << agent.id;
+        }
+    }
+
+    if (agentNames.isEmpty()) {
+        QMessageBox::warning(this, "警告", "没有可用的 Agent（请先在设置中配置并启用 Agent）");
+        return;
+    }
+
+    bool ok;
+    QString agentName = QInputDialog::getItem(this, "批量启用",
+        QString("将 %1 个 skill 启用到哪个 Agent？").arg(ids.size()),
+        agentNames, 0, false, &ok);
+    if (!ok) {
+        return;
+    }
+
+    int agentIndex = agentNames.indexOf(agentName);
+    int agentId = agentIds[agentIndex];
+
+    int success = 0;
+    for (int skillId : ids) {
+        if (m_agentManager->enableSkillForAgent(skillId, agentId)) {
+            success++;
+        }
+    }
+
+    QMessageBox::information(this, "批量启用",
+        QString("成功启用 %1/%2 个 skill 到 %3").arg(success).arg(ids.size()).arg(agentName));
+    loadSkills();
 }
 
 void MainWindow::onBatchDisableClicked()
@@ -308,8 +360,43 @@ void MainWindow::onBatchDisableClicked()
         QMessageBox::information(this, "提示", "请先选择 skill");
         return;
     }
-    // TODO: 实现批量禁用
-    QMessageBox::information(this, "批量禁用", QString("将禁用 %1 个 skill").arg(ids.size()));
+
+    // 选择目标 Agent
+    QStringList agentNames;
+    QVector<int> agentIds;
+    for (const AgentInfo &agent : m_allAgents) {
+        if (agent.enabled && !agent.path.isEmpty() && QDir(agent.path).exists()) {
+            agentNames << agent.name;
+            agentIds << agent.id;
+        }
+    }
+
+    if (agentNames.isEmpty()) {
+        QMessageBox::warning(this, "警告", "没有可用的 Agent");
+        return;
+    }
+
+    bool ok;
+    QString agentName = QInputDialog::getItem(this, "批量禁用",
+        QString("将 %1 个 skill 从哪个 Agent 禁用？").arg(ids.size()),
+        agentNames, 0, false, &ok);
+    if (!ok) {
+        return;
+    }
+
+    int agentIndex = agentNames.indexOf(agentName);
+    int agentId = agentIds[agentIndex];
+
+    int success = 0;
+    for (int skillId : ids) {
+        if (m_agentManager->disableSkillForAgent(skillId, agentId)) {
+            success++;
+        }
+    }
+
+    QMessageBox::information(this, "批量禁用",
+        QString("成功禁用 %1/%2 个 skill 从 %3").arg(success).arg(ids.size()).arg(agentName));
+    loadSkills();
 }
 
 void MainWindow::onBatchDeleteClicked()
@@ -319,13 +406,25 @@ void MainWindow::onBatchDeleteClicked()
         QMessageBox::information(this, "提示", "请先选择 skill");
         return;
     }
+
     auto reply = QMessageBox::question(this, "确认删除",
-        QString("确定要删除 %1 个 skill 吗？").arg(ids.size()),
+        QString("确定要删除 %1 个 skill 吗？\n（将同时删除中央库中的文件夹）").arg(ids.size()),
         QMessageBox::Yes | QMessageBox::No);
-    if (reply == QMessageBox::Yes) {
-        // TODO: 实现批量删除
-        QMessageBox::information(this, "批量删除", "删除功能待实现");
+    if (reply != QMessageBox::Yes) {
+        return;
     }
+
+    int success = 0;
+    for (int skillId : ids) {
+        if (m_skillManager->deleteSkill(skillId, true)) {
+            success++;
+        }
+    }
+
+    QMessageBox::information(this, "批量删除",
+        QString("成功删除 %1/%2 个 skill").arg(success).arg(ids.size()));
+    loadSkills();
+    loadTags();
 }
 
 void MainWindow::onBatchTagClicked()
@@ -335,14 +434,29 @@ void MainWindow::onBatchTagClicked()
         QMessageBox::information(this, "提示", "请先选择 skill");
         return;
     }
+
     bool ok;
     QString tag = QInputDialog::getText(this, "批量打标签",
-        "输入标签名称：", QLineEdit::Normal, "", &ok);
-    if (ok && !tag.isEmpty()) {
-        // TODO: 实现批量打标签
-        QMessageBox::information(this, "批量打标签",
-            QString("将给 %1 个 skill 添加标签: %2").arg(ids.size()).arg(tag));
+        QString("输入标签名称（将添加到 %1 个 skill）：").arg(ids.size()),
+        QLineEdit::Normal, "", &ok);
+    if (!ok || tag.trimmed().isEmpty()) {
+        return;
     }
+
+    QString trimmed = tag.trimmed();
+    int tagId = m_dbManager->getOrCreateTag(trimmed);
+
+    int success = 0;
+    for (int skillId : ids) {
+        if (m_dbManager->addSkillTag(skillId, tagId)) {
+            success++;
+        }
+    }
+
+    QMessageBox::information(this, "批量打标签",
+        QString("成功给 %1/%2 个 skill 添加标签「%3」").arg(success).arg(ids.size()).arg(trimmed));
+    loadSkills();
+    loadTags();
 }
 
 void MainWindow::onToggleCardSize()
@@ -399,9 +513,31 @@ void MainWindow::onDeleteSkillRequested(int skillId)
 
 void MainWindow::onExportSkillRequested(int skillId)
 {
-    Q_UNUSED(skillId);
-    QMessageBox::information(this, "导出 Skill", "导出功能待实现");
-    // TODO: 实现导出功能
+    if (!m_skillManager) {
+        QMessageBox::warning(this, "警告", "SkillManager 未初始化");
+        return;
+    }
+
+    SkillInfo skill = m_dbManager->getSkill(skillId);
+    if (skill.id == -1) {
+        QMessageBox::warning(this, "错误", "Skill 不存在");
+        return;
+    }
+
+    QString defaultName = skill.name + ".zip";
+    QString filePath = QFileDialog::getSaveFileName(this,
+        "导出 Skill", defaultName, "ZIP 文件 (*.zip)");
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    if (m_skillManager->exportToZip(skillId, filePath)) {
+        QMessageBox::information(this, "导出成功",
+            QString("Skill 已导出到：\n%1").arg(filePath));
+    } else {
+        QMessageBox::warning(this, "导出失败", "导出过程中出现错误");
+    }
 }
 
 void MainWindow::onSidebarClosed()
@@ -421,8 +557,10 @@ void MainWindow::onRequestSettings()
     // 连接 agentsChanged 信号以刷新 agent 列表
     connect(&dialog, &SettingsDialog::agentsChanged, this, [this]() {
         loadAgents();
-        m_cardWidget->setAgentList(m_allAgents);
     });
+
+    // 连接主题切换信号
+    connect(&dialog, &SettingsDialog::themeChanged, this, &MainWindow::applyTheme);
 
     dialog.exec();
 }
@@ -433,14 +571,16 @@ void MainWindow::onManageTagsClicked()
         QMessageBox::warning(this, "警告", "数据库未初始化");
         return;
     }
-    // TODO: 创建 TagManagerDialog 并打开
-    QMessageBox::information(this, "管理标签", "标签管理功能待实现");
+    TagManagerDialog dialog(m_dbManager, this);
+    dialog.exec();
+    // 标签变化后刷新标签云
+    loadTags();
 }
 
 void MainWindow::onAddSkillClicked()
 {
-    if (!m_dbManager) {
-        QMessageBox::warning(this, "警告", "数据库未初始化");
+    if (!m_dbManager || !m_skillManager) {
+        QMessageBox::warning(this, "警告", "系统未就绪");
         return;
     }
 
@@ -454,41 +594,58 @@ void MainWindow::onAddSkillClicked()
     }
 
     // 检查 SKILL.md 是否存在
-    if (!QFile::exists(folderPath + "/SKILL.md")) {
-        QMessageBox::warning(this, "错误",
-            "所选文件夹中没有 SKILL.md 文件。\n"
-            "请选择一个包含 SKILL.md 的 skill 文件夹。");
+    QString skillMdPath = QDir::cleanPath(folderPath + "/SKILL.md");
+    if (!QFile::exists(skillMdPath)) {
+        QMessageBox::warning(this, "导入失败",
+            "导入失败，请确认文件夹中包含 SKILL.md 文件");
         return;
     }
 
-    // 获取 skill 名称
-    QFileInfo fi(folderPath);
-    QString skillName = fi.fileName();
+    // 获取文件夹名作为 skill 名称
+    QFileInfo folderInfo(folderPath);
+    QString skillName = folderInfo.fileName();
 
-    // 检查是否已存在
-    QVector<SkillInfo> existing = m_dbManager->searchSkills(skillName);
-    for (const SkillInfo &s : existing) {
-        if (s.name == skillName) {
-            auto reply = QMessageBox::question(this, "重复检测",
-                QString("Skill '%1' 已存在，是否覆盖？").arg(skillName),
-                QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-            if (reply == QMessageBox::Yes) {
-                m_dbManager->updateSkill(s.id, {{"path", folderPath}});
-            }
-            loadSkills();
+    // 检查重复
+    if (m_skillManager->checkDuplicate(skillName)) {
+        QStringList options;
+        options << "覆盖" << "重命名" << "取消";
+        bool ok;
+        QString choice = QInputDialog::getItem(this, "Skill 已存在",
+            QString("名为「%1」的 skill 已存在，请选择操作：").arg(skillName),
+            options, 0, false, &ok);
+
+        if (!ok || choice == "取消") {
             return;
         }
+        if (choice == "覆盖") {
+            // 覆盖模式：importFromFolder 会删除旧的再导入
+            int skillId = m_skillManager->importFromFolder(folderPath, true);
+            if (skillId == -1) {
+                QMessageBox::warning(this, "导入失败", "导入失败，请确认文件夹中包含 SKILL.md 文件");
+                return;
+            }
+            QMessageBox::information(this, "成功", QString("Skill 已覆盖导入！ID: %1").arg(skillId));
+            loadSkills();
+            loadTags();
+            return;
+        }
+        // 重命名：继续下面的流程，importFromFolder 内部自动处理
     }
 
-    // 添加新 skill
-    int id = m_dbManager->addSkill(skillName, folderPath, "");
-    if (id > 0) {
-        QMessageBox::information(this, "成功",
-            QString("Skill '%1' 已成功导入！ID: %2").arg(skillName).arg(id));
-        loadSkills();
-    } else {
-        QMessageBox::warning(this, "错误", "导入失败：无法添加到数据库");
+    // 正常导入
+    int skillId = m_skillManager->importFromFolder(folderPath);
+
+    if (skillId == -1) {
+        QMessageBox::warning(this, "导入失败",
+            "导入失败，请确认文件夹中包含 SKILL.md 文件");
+        return;
     }
+
+    QMessageBox::information(this, "成功",
+        QString("Skill 已成功导入！ID: %1").arg(skillId));
+
+    loadSkills();
+    loadTags();
 }
 
 void MainWindow::onBackupClicked()
@@ -531,22 +688,6 @@ void MainWindow::onFrequencyFilterClicked(QPushButton *btn)
     updateStatus();
 }
 
-void MainWindow::onAgentFilterClicked(QPushButton *btn)
-{
-    int agentId = btn->property("agentId").toInt();
-
-    if (btn->isChecked()) {
-        if (!m_activeFilterAgentIds.contains(agentId)) {
-            m_activeFilterAgentIds.append(agentId);
-        }
-    } else {
-        m_activeFilterAgentIds.removeAll(agentId);
-    }
-
-    m_cardWidget->filterByAgents(m_activeFilterAgentIds);
-    updateStatus();
-}
-
 void MainWindow::onSelectionChanged(int count)
 {
     Q_UNUSED(count);
@@ -570,8 +711,8 @@ void MainWindow::onFrequencyChanged(int skillId, int newFrequency)
         }
     }
 
-    // 刷新卡片显示
-    m_cardWidget->setSkills(m_allSkills);
+    // 原地更新卡片（不跳动）
+    m_cardWidget->updateSkill(skillId, m_dbManager->getSkill(skillId));
 
     updateStatus();
 }
@@ -583,14 +724,12 @@ void MainWindow::onAgentToggled(int skillId, int agentId, bool enabled)
     }
 
     if (enabled) {
-        // 点亮 → 复制 skill 到 agent 目录
         if (!m_agentManager->enableSkillForAgent(skillId, agentId)) {
             QMessageBox::warning(this, "操作失败",
                 QString("无法将 Skill 复制到 Agent 目录"));
             return;
         }
     } else {
-        // 点灭 → 从 agent 目录删除 skill
         if (!m_agentManager->disableSkillForAgent(skillId, agentId)) {
             QMessageBox::warning(this, "操作失败",
                 QString("无法从 Agent 目录移除 Skill"));
@@ -612,8 +751,97 @@ void MainWindow::onAgentToggled(int skillId, int agentId, bool enabled)
         }
     }
 
-    // 刷新卡片显示
-    m_cardWidget->setSkills(m_allSkills);
+    // 原地更新卡片（不跳动）
+    m_cardWidget->updateSkill(skillId, m_dbManager->getSkill(skillId));
+}
+
+void MainWindow::onCardTagAddRequested(int skillId)
+{
+    if (!m_dbManager) return;
+
+    SkillInfo skill = m_dbManager->getSkill(skillId);
+    if (skill.id == -1) return;
+
+    // 获取所有已有标签
+    QVector<TagInfo> allTags = m_dbManager->getTags();
+    QStringList tagNames;
+    for (const TagInfo &t : allTags) {
+        if (!skill.tags.contains(t.name)) {
+            tagNames << t.name;
+        }
+    }
+
+    bool ok;
+    QString tag;
+    if (!tagNames.isEmpty()) {
+        // 有已有标签时，提供选择 + 自定义输入
+        tagNames.prepend("(输入新标签)");
+        tag = QInputDialog::getItem(this, "添加标签",
+            QString("为「%1」添加标签：").arg(skill.name),
+            tagNames, 0, false, &ok);
+        if (!ok) return;
+        if (tag == "(输入新标签)") {
+            tag = QInputDialog::getText(this, "添加标签",
+                "输入新标签名称：", QLineEdit::Normal, "", &ok);
+            if (!ok || tag.trimmed().isEmpty()) return;
+            tag = tag.trimmed();
+        }
+    } else {
+        tag = QInputDialog::getText(this, "添加标签",
+            QString("为「%1」输入标签名称：").arg(skill.name),
+            QLineEdit::Normal, "", &ok);
+        if (!ok || tag.trimmed().isEmpty()) return;
+        tag = tag.trimmed();
+    }
+
+    int tagId = m_dbManager->getOrCreateTag(tag);
+    if (tagId > 0) {
+        m_dbManager->addSkillTag(skillId, tagId);
+    }
+
+    m_cardWidget->updateSkill(skillId, m_dbManager->getSkill(skillId));
+    loadTags();
+}
+
+void MainWindow::onCardTagRemoveRequested(int skillId, const QString &tag)
+{
+    if (!m_dbManager) return;
+
+    SkillInfo skill = m_dbManager->getSkill(skillId);
+    if (skill.id == -1) return;
+
+    auto reply = QMessageBox::question(this, "确认删除标签",
+        QString("确定要从「%1」移除标签「%2」吗？").arg(skill.name, tag),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    QVector<TagInfo> allTags = m_dbManager->getTags();
+    for (const TagInfo &t : allTags) {
+        if (t.name == tag) {
+            m_dbManager->removeSkillTag(skillId, t.id);
+            break;
+        }
+    }
+
+    m_cardWidget->updateSkill(skillId, m_dbManager->getSkill(skillId));
+    loadTags();
+}
+
+void MainWindow::onCardDeleteRequested(int skillId)
+{
+    if (!m_dbManager || !m_skillManager) return;
+
+    SkillInfo skill = m_dbManager->getSkill(skillId);
+    if (skill.id == -1) return;
+
+    auto reply = QMessageBox::question(this, "确认删除",
+        QString("确定要删除 Skill「%1」吗？\n将同时删除中央库中的文件夹和所有 Agent 中的副本。").arg(skill.name),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    m_skillManager->deleteSkill(skillId, true);
+    loadSkills();
+    loadTags();
 }
 
 void MainWindow::updateStatus()
@@ -716,6 +944,16 @@ void MainWindow::loadSkills()
         return;
     }
 
+    // 自动清理孤儿记录（数据库有记录但文件夹不存在）
+    QVector<int> invalidIds = m_dbManager->validateSkills();
+    for (int id : invalidIds) {
+        qInfo() << "Removing orphan skill record, id=" << id;
+        m_dbManager->deleteSkill(id);
+    }
+    if (!invalidIds.isEmpty()) {
+        qInfo() << "Cleaned up" << invalidIds.size() << "orphan skill records";
+    }
+
     m_allSkills = m_dbManager->getAllSkills("frequency");
     m_cardWidget->setSkills(m_allSkills);
 
@@ -743,37 +981,7 @@ void MainWindow::loadAgents()
     }
 
     m_allAgents = m_dbManager->getAllAgents();
-
-    // 用存储的布局指针直接操作，无需遍历
-    if (!m_agentFilterLayout) {
-        return;
-    }
-
-    // 清除旧按钮（保留 label 和 stretch）
-    while (m_agentFilterLayout->count() > 1) {
-        QLayoutItem *item = m_agentFilterLayout->takeAt(1);
-        if (item->widget()) delete item->widget();
-        delete item;
-    }
-    m_agentFilterButtons.clear();
-
-    // 为每个 agent 创建筛选按钮
-    for (const AgentInfo &agent : m_allAgents) {
-        QPushButton *btn = new QPushButton(agent.name);
-        btn->setCheckable(true);
-        btn->setProperty("agentId", agent.id);
-        btn->setStyleSheet(
-            QString("QPushButton { border: 1px solid #4a90d9; border-radius: 12px; "
-                    "padding: 3px 10px; color: #4a90d9; background-color: transparent; "
-                    "font-size: 11px; }"
-                    "QPushButton:checked { background-color: #4a90d9; color: white; }")
-        );
-        connect(btn, &QPushButton::clicked, this, [this, btn]() {
-            onAgentFilterClicked(btn);
-        });
-        m_agentFilterLayout->insertWidget(m_agentFilterLayout->count() - 1, btn);
-        m_agentFilterButtons.append(btn);
-    }
+    // Agent 筛选栏已移除，无需动态创建按钮
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -794,4 +1002,114 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::onRefreshClicked()
+{
+    if (!m_agentManager || !m_dbManager) {
+        QMessageBox::warning(this, "警告", "系统未就绪，请稍后再试");
+        return;
+    }
+
+    qInfo() << "Manual refresh triggered";
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    m_statusLabel->setText("正在扫描 agent 路径...");
+    QApplication::processEvents();  // 让 UI 更新
+
+    QVector<int> scannedAgents = m_agentManager->scanAllAgents();
+
+    loadSkills();
+
+    m_statusLabel->setText(QString("扫描完成，已处理 %1 个 agent，共 %2 个 skill")
+                          .arg(scannedAgents.size()).arg(m_allSkills.size()));
+
+    QApplication::restoreOverrideCursor();
+
+    qInfo() << "Manual refresh done, scanned" << scannedAgents.size() << "agents";
+}
+
+// ============ 拖拽事件 ============
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    if (!m_skillManager) {
+        QMessageBox::warning(this, "警告", "SkillManager 未初始化");
+        return;
+    }
+
+    QVector<QString> paths;
+    QList<QUrl> urls = event->mimeData()->urls();
+    for (const QUrl &url : urls) {
+        paths.append(url.toLocalFile());
+    }
+
+    if (paths.isEmpty()) {
+        return;
+    }
+
+    qInfo() << "Drag-drop: got" << paths.size() << "items";
+    m_statusLabel->setText(QString("正在导入 %1 个文件/文件夹...").arg(paths.size()));
+    QApplication::processEvents();
+
+    int imported = m_skillManager->importByDragDrop(paths);
+
+    qInfo() << "Drag-drop import done:" << imported << "skills imported";
+    loadSkills();
+    loadTags();
+    m_statusLabel->setText(QString("拖拽导入完成，共导入 %1 个 skill").arg(imported));
+}
+
+// ============================================================================
+// 主题
+// ============================================================================
+
+void MainWindow::applyTheme(const QString &theme)
+{
+    if (theme == "dark") {
+        QString darkSheet =
+            "QMainWindow { background-color: #2b2b2b; }"
+            "QWidget { background-color: #2b2b2b; color: #e0e0e0; }"
+            "SkillCard { background-color: #3c3c3c; border: 1px solid #555555; }"
+            "SkillCard:hover { border: 1px solid #4a90d9; }"
+            "QLineEdit { background-color: #3c3c3c; border: 1px solid #555555; "
+            "  padding: 6px 10px; border-radius: 6px; color: #e0e0e0; }"
+            "QPushButton { background-color: #3c3c3c; color: #e0e0e0; "
+            "  border: 1px solid #555555; border-radius: 4px; padding: 4px 12px; }"
+            "QPushButton:hover { background-color: #505050; }"
+            "QPushButton:checked { background-color: #4a90d9; color: white; }"
+            "QScrollArea { background-color: #2b2b2b; border: 1px solid #555555; }"
+            "QTextBrowser { background-color: #3c3c3c; color: #e0e0e0; "
+            "  border: 1px solid #555555; }"
+            "QLabel { color: #e0e0e0; }"
+            "QGroupBox { color: #e0e0e0; border: 1px solid #555555; }"
+            "QTableWidget { background-color: #3c3c3c; color: #e0e0e0; "
+            "  gridline-color: #555555; }"
+            "QTableWidget::item { color: #e0e0e0; }"
+            "QListWidget { background-color: #3c3c3c; color: #e0e0e0; }"
+            "QComboBox { background-color: #3c3c3c; color: #e0e0e0; "
+            "  border: 1px solid #555555; padding: 4px; }"
+            "QMenuBar { background-color: #2b2b2b; color: #e0e0e0; }"
+            "QMenu { background-color: #3c3c3c; color: #e0e0e0; }"
+            "QMenu::item:selected { background-color: #4a90d9; }"
+            "QStatusBar { color: #e0e0e0; }"
+            "QCheckBox { color: #e0e0e0; }"
+            "QTabWidget::pane { background-color: #2b2b2b; }"
+            "QTabBar::tab { background-color: #3c3c3c; color: #e0e0e0; "
+            "  padding: 6px 12px; }"
+            "QTabBar::tab:selected { background-color: #4a90d9; }";
+        qApp->setStyleSheet(darkSheet);
+    } else {
+        // 浅色主题：清除样式表
+        qApp->setStyleSheet("");
+    }
 }

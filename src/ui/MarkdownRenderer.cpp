@@ -97,8 +97,13 @@ QString MarkdownRenderer::convertCodeBlocks(const QString &md)
     QString result = md;
 
     // 代码块 ```lang\ncode\n```
-    QRegularExpression codeBlockRegex("```(?:(\\w+)\\n)?([\\s\\S]*?)```");
-    result.replace(codeBlockRegex, "<pre style='background-color:#f5f5f5;padding:10px;border-radius:4px;overflow-x:auto;'><code>\\2</code></pre>");
+    // 使用 DotMatchesEverythingOption 让 . 匹配换行符
+    QRegularExpression codeBlockRegex("```(?:(\\w+)\\n)?(.*?)```",
+                                       QRegularExpression::DotMatchesEverythingOption);
+    result.replace(codeBlockRegex,
+                   "<pre style='background-color:#f5f5f5;padding:10px;"
+                   "border-radius:4px;overflow-x:auto;'>"
+                   "<code>\\2</code></pre>");
 
     return result;
 }

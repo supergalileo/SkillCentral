@@ -94,6 +94,9 @@ public:
     // Validation
     QVector<int> validateSkills();
 
+    // 清空所有标签
+    bool clearAllTags();
+
     // Helper
     int getOrCreateTag(const QString &name);
 

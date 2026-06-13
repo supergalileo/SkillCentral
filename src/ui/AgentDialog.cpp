@@ -88,16 +88,15 @@ void AgentDialog::onAccept()
         return;
     }
 
-    // 验证路径
+    // 验证路径（允许为空或不存在，只做提示）
     QString path = getPath();
-    if (path.isEmpty()) {
-        QMessageBox::warning(this, "警告", "路径不能为空");
-        return;
-    }
-
-    if (!QDir(path).exists()) {
-        QMessageBox::warning(this, "警告", "路径不存在");
-        return;
+    if (!path.isEmpty() && !QDir(path).exists()) {
+        auto reply = QMessageBox::warning(this, "提示",
+            "路径 \"" + path + "\" 当前不存在。\n是否仍要保存？\n（稍后可在 agent 目录中手动创建）",
+            QMessageBox::Yes | QMessageBox::No);
+        if (reply == QMessageBox::No) {
+            return;
+        }
     }
 
     QDialog::accept();

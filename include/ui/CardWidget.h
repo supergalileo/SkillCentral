@@ -19,8 +19,12 @@ public:
     ~CardWidget();
 
     void setSkills(const QVector<SkillInfo> &skills);
+    void setAgentList(const QVector<AgentInfo> &agents);
     void addSkill(const SkillInfo &skill);
     void clearSkills();
+
+    // 原地更新单个 skill（不重建卡片、不跳动）
+    void updateSkill(int skillId, const SkillInfo &newSkill);
 
     void setCardSize(bool large);
     bool isLargeMode() const { return m_largeMode; }
@@ -38,6 +42,9 @@ signals:
     void cardClicked(int skillId);
     void frequencyChanged(int skillId, int newFrequency);
     void agentToggled(int skillId, int agentId, bool enabled);
+    void tagAddRequested(int skillId);
+    void tagRemoveRequested(int skillId, const QString &tag);
+    void deleteRequested(int skillId);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -55,6 +62,7 @@ private:
     int calculateColumns() const;
 
     QVector<SkillInfo> m_allSkills;
+    QVector<AgentInfo> m_agentList;
     QVector<SkillCard *> m_cards;
     QGridLayout *m_gridLayout;
     bool m_largeMode;

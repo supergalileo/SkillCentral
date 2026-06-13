@@ -16,7 +16,7 @@ public:
     ~SkillManager();
 
     // Import skills
-    int importFromFolder(const QString &folderPath);
+    int importFromFolder(const QString &folderPath, bool allowOverwrite = false);
     int importFromWorkBuddy(const QString &workbuddyPath);
     int importFromGitHub(const QString &repoUrl);
     int importFromZip(const QString &zipPath);
@@ -44,6 +44,13 @@ public:
     static QString parseDescription(const QString &skillMdPath);
     static QStringList parseTriggers(const QString &skillMdPath);
     static QString parseName(const QString &skillMdPath);
+    static QStringList parseTags(const QString &skillMdPath);  // 新增：从 SKILL.md 解析标签
+
+    // 文件名安全化（去除 Windows 非法字符）
+    static QString sanitizeFolderName(const QString &name);
+
+    // 重复检测（供 UI 层在导入前调用）
+    bool checkDuplicate(const QString &name);
 
 signals:
     void importProgress(int current, int total, const QString &message);
@@ -59,7 +66,6 @@ private:
 
     bool copySkillFolder(const QString &sourcePath, const QString &skillName);
     QString generateUniqueName(const QString &baseName);
-    bool checkDuplicate(const QString &name);
     int handleDuplicate(const QString &name);
 };
 

@@ -94,7 +94,11 @@ add_test(NAME SkillManagerTest COMMAND test_SkillManager)
 add_executable(test_AgentManager
     tests/test_AgentManager.cpp
     src/models/AgentManager.cpp
+    src/models/SkillManager.cpp
+    src/models/Skill.cpp
     include/models/AgentManager.h
+    include/models/SkillManager.h
+    include/models/Skill.h
     src/database/DatabaseManager.cpp
     include/database/DatabaseManager.h
 )

@@ -149,7 +149,9 @@ void SettingsDialog::onEditAgent()
         fields["icon"] = icon;
         fields["enabled"] = enabled;
 
-        if (m_dbManager->updateAgent(agentId, fields)) {
+        bool ok = m_dbManager->updateAgent(agentId, fields);
+
+        if (ok) {
             refreshAgents();
             emit agentsChanged();
         } else {
@@ -581,7 +583,9 @@ void SettingsDialog::loadSettings()
 void SettingsDialog::saveSettings()
 {
     // 中央库路径
-    m_dbManager->setSetting("libraryPath", m_libraryPathEdit->text());
+    if (!m_dbManager->setSetting("libraryPath", m_libraryPathEdit->text())) {
+        QMessageBox::warning(this, "保存失败", "无法保存库路径到数据库");
+    }
 
     // 启动选项
     m_dbManager->setSetting("autoScan", m_autoScanCheck->isChecked() ? "true" : "false");
@@ -682,6 +686,14 @@ void SettingsDialog::accept()
 {
     // 保存设置
     saveSettings();
+
+    // 验证 libraryPath 是否真的写入了数据库
+    QString savedPath = m_dbManager->getSetting("libraryPath", "");
+    if (savedPath != m_libraryPathEdit->text()) {
+        QMessageBox::warning(this, "保存失败",
+            QString("库路径未正确保存！\n期望: %1\n实际: %2")
+                .arg(m_libraryPathEdit->text()).arg(savedPath));
+    }
 
     // 发射信号
     emit settingsChanged();

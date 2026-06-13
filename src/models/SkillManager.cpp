@@ -33,18 +33,16 @@ SkillManager::~SkillManager()
 {
 }
 
-int SkillManager::importFromFolder(const QString &folderPath)
+int SkillManager::importFromFolder(const QString &folderPath, bool allowOverwrite)
 {
     emit importProgress(0, 1, "Starting import from folder...");
 
-    // Check if folder is valid
     QFileInfo folderInfo(folderPath);
     if (!folderInfo.exists() || !folderInfo.isDir()) {
         emit errorOccurred("Invalid folder path: " + folderPath);
         return -1;
     }
 
-    // Check if SKILL.md exists
     QString skillMdPath = QDir::cleanPath(folderPath + "/SKILL.md");
     QFileInfo skillMdInfo(skillMdPath);
     if (!skillMdInfo.exists()) {
@@ -52,43 +50,58 @@ int SkillManager::importFromFolder(const QString &folderPath)
         return -1;
     }
 
-    // Parse skill name from SKILL.md or use folder name
-    QString skillName = SkillManager::parseName(skillMdPath);
-    if (skillName.isEmpty()) {
-        skillName = folderInfo.fileName();
-    }
+    QString folderBaseName = folderInfo.fileName();
+    QString skillName = folderBaseName;
+    QString folderName = SkillManager::sanitizeFolderName(folderBaseName);
 
-    // Check for duplicate
-    if (checkDuplicate(skillName)) {
-        int action = handleDuplicate(skillName);
-        if (action == -1) { // Cancel
-            emit errorOccurred("Import cancelled by user");
-            return -1;
-        } else if (action == 0) { // Overwrite
-            // TODO: Delete existing skill and overwrite
-            skillName = generateUniqueName(skillName);
-        } else { // Rename
-            skillName = generateUniqueName(skillName);
+    // 去重检查
+    QString existingSkillPath = QDir::cleanPath(m_libraryPath + "/" + folderName);
+    if (QDir(existingSkillPath).exists()) {
+        // 查找数据库中对应的记录
+        QVector<SkillInfo> allSkills = m_dbManager->getAllSkills();
+        for (const SkillInfo &s : allSkills) {
+            if (s.name == skillName || s.path == existingSkillPath) {
+                if (allowOverwrite) {
+                    // 覆盖：删除旧文件夹和数据库记录
+                    qInfo() << "Overwriting existing skill:" << s.name << "ID=" << s.id;
+                    QDir(existingSkillPath).removeRecursively();
+                    m_dbManager->deleteSkill(s.id);
+                    break;
+                } else {
+                    qInfo() << "Skill already exists, skipping. ID=" << s.id;
+                    return s.id;
+                }
+            }
         }
     }
 
+    // 检查数据库中是否有同名记录（自动重命名）
+    if (checkDuplicate(skillName)) {
+        qInfo() << "Duplicate display name in DB, generating unique:" << skillName;
+        skillName = generateUniqueName(skillName);
+    }
+
     // Copy folder to library
-    if (!copySkillFolder(folderPath, skillName)) {
-        emit errorOccurred("Failed to copy skill folder");
+    QString destPath = QDir::cleanPath(m_libraryPath + "/" + folderName);
+    if (!copySkillFolder(folderPath, folderName)) {
+        emit errorOccurred("Failed to copy skill folder to: " + destPath);
         return -1;
     }
 
-    // Parse description
-    QString description = SkillManager::parseDescription(skillMdPath);
+    // 解析描述
+    QString destSkillMd = QDir::cleanPath(m_libraryPath + "/" + folderName + "/SKILL.md");
+    QString description = SkillManager::parseDescription(destSkillMd);
 
     // Add to database
-    QString skillPath = QDir::cleanPath(m_libraryPath + "/" + skillName);
+    QString skillPath = QDir::cleanPath(m_libraryPath + "/" + folderName);
     int skillId = m_dbManager->addSkill(skillName, skillPath, description);
 
     if (skillId == -1) {
         emit errorOccurred("Failed to add skill to database");
         return -1;
     }
+
+    // 标签由用户手动管理，不再自动添加
 
     emit importProgress(1, 1, "Import completed");
     emit skillImported(skillId);
@@ -582,10 +595,9 @@ QString SkillManager::parseDescription(const QString &skillMdPath)
     bool inCodeBlock = false;
     int charCount = 0;
 
-    while (!in.atEnd() && charCount < 200) {
+    while (!in.atEnd() && charCount < 800) {
         QString line = in.readLine();
 
-        // Skip code blocks
         if (line.trimmed().startsWith("```")) {
             inCodeBlock = !inCodeBlock;
             continue;
@@ -595,33 +607,80 @@ QString SkillManager::parseDescription(const QString &skillMdPath)
             continue;
         }
 
-        // Skip headings
         if (line.trimmed().startsWith("#")) {
             continue;
         }
 
-        // Skip empty lines
         if (line.trimmed().isEmpty()) {
             continue;
         }
 
-        // Found a valid description line
         if (!description.isEmpty()) {
             description += " ";
         }
         description += line.trimmed();
         charCount += line.trimmed().length();
-
-        // Stop if we have enough characters
-        if (charCount >= 200) {
-            description = description.left(200);
-            break;
-        }
     }
 
     file.close();
 
     return description;
+}
+
+QStringList SkillManager::parseTags(const QString &skillMdPath)
+{
+    QStringList tags;
+
+    QFile file(skillMdPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return tags;
+    }
+
+    QTextStream in(&file);
+    in.setEncoding(QStringConverter::Utf8);
+
+    QStringList headingWords;
+    QRegularExpression headingRe("^#+\\s+(.+)$");
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+
+        // 解析 "tags:" 或 "标签：" 行
+        if (line.startsWith("tags:", Qt::CaseInsensitive) ||
+            line.startsWith("标签：")) {
+            QString tagPart = line.section(':', 1).trimmed();
+            if (!tagPart.isEmpty()) {
+                for (const QString &t : tagPart.split(QRegularExpression("[,，;；\\s]+"), Qt::SkipEmptyParts)) {
+                    QString cleaned = t.trimmed();
+                    if (!cleaned.isEmpty() && !tags.contains(cleaned)) {
+                        tags.append(cleaned);
+                    }
+                }
+            }
+        }
+
+        // 从标题行提取关键词作为标签
+        QRegularExpressionMatch match = headingRe.match(line);
+        if (match.hasMatch()) {
+            QString heading = match.captured(1).trimmed();
+            // 只取一级和二级标题，且长度 > 1
+            if (!heading.isEmpty()) {
+                headingWords.append(heading);
+            }
+        }
+    }
+
+    file.close();
+
+    // 把标题关键词也加入标签（去重，最多 3 个）
+    for (const QString &h : headingWords) {
+        if (tags.size() >= 5) break;
+        if (!tags.contains(h)) {
+            tags.append(h);
+        }
+    }
+
+    return tags;
 }
 
 QStringList SkillManager::parseTriggers(const QString &skillMdPath)
@@ -703,14 +762,55 @@ QString SkillManager::parseName(const QString &skillMdPath)
     return "";
 }
 
-bool SkillManager::copySkillFolder(const QString &sourcePath, const QString &skillName)
+QString SkillManager::sanitizeFolderName(const QString &name)
 {
-    QString destPath = QDir::cleanPath(m_libraryPath + "/" + skillName);
+    QString safe = name;
+
+    // Windows 非法文件名字符：< > : " / \ | ? * 以及中文冒号 ：
+    // 同时替换换行为空格
+    safe.replace("：", "-");   // 中文冒号 → 连字符
+    safe.replace(":", "-");    // 英文冒号 → 连字符
+    safe.replace("<", "_");
+    safe.replace(">", "_");
+    safe.replace("\"", "_");
+    safe.replace("/", "_");
+    safe.replace("\\", "_");
+    safe.replace("|", "_");
+    safe.replace("?", "_");
+    safe.replace("*", "_");
+    safe.replace("\n", " ");
+    safe.replace("\r", " ");
+
+    // 压缩多余空格为单个空格，并去掉首尾空格
+    safe = safe.simplified();
+
+    // 限制长度（Windows MAX_PATH 相关，文件夹名保留 80 字符足够）
+    if (safe.length() > 80) {
+        safe = safe.left(77) + "...";
+    }
+
+    // 如果处理后为空，用默认名
+    if (safe.isEmpty()) {
+        safe = "unnamed_skill";
+    }
+
+    return safe;
+}
+
+bool SkillManager::copySkillFolder(const QString &sourcePath, const QString &destRelPath)
+{
+    QString destPath;
+
+    // 判断 destRelPath 是绝对路径还是相对路径
+    if (QDir::isAbsolutePath(destRelPath)) {
+        destPath = QDir::cleanPath(destRelPath);
+    } else {
+        destPath = QDir::cleanPath(m_libraryPath + "/" + destRelPath);
+    }
 
     // Check if destination already exists
     QDir destDir(destPath);
     if (destDir.exists()) {
-        // Remove existing folder
         if (!destDir.removeRecursively()) {
             return false;
         }
@@ -721,18 +821,18 @@ bool SkillManager::copySkillFolder(const QString &sourcePath, const QString &ski
         return false;
     }
 
-    // Copy all files
+    // Copy all files and subdirectories
     QDir sourceDir(sourcePath);
-    QStringList files = sourceDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+    QStringList entries = sourceDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
 
-    for (const QString &file : files) {
-        QString src = QDir::cleanPath(sourcePath + "/" + file);
-        QString dst = QDir::cleanPath(destPath + "/" + file);
+    for (const QString &entry : entries) {
+        QString src = QDir::cleanPath(sourcePath + "/" + entry);
+        QString dst = QDir::cleanPath(destPath + "/" + entry);
 
         QFileInfo info(src);
         if (info.isDir()) {
-            // Recursively copy subdirectory
-            if (!copySkillFolder(src, file)) {
+            // Recursively copy subdirectory — 传入完整相对目标路径（保持目录层级）
+            if (!copySkillFolder(src, dst)) {
                 return false;
             }
         } else {
