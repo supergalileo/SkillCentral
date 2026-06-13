@@ -1,0 +1,1 @@
+-ID:/workbuddy/SkillCentral/build/test_AgentManager_autogen/include -ID:/workbuddy/SkillCentral/include -isystem F:/Qt/6.11.1/mingw_64/include/QtCore -isystem F:/Qt/6.11.1/mingw_64/include -isystem "F:/Qt/6.11.1/mingw_64/mkspecs/win32-g++" -isystem F:/Qt/6.11.1/mingw_64/include/QtTest -isystem F:/Qt/6.11.1/mingw_64/include/QtSql

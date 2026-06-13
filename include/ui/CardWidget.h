@@ -1,0 +1,67 @@
+#ifndef CARDWIDGET_H
+#define CARDWIDGET_H
+
+#include <QWidget>
+#include <QGridLayout>
+#include <QVector>
+#include <QStringList>
+#include <QTimer>
+#include "database/DatabaseManager.h"
+
+class SkillCard;
+
+class CardWidget : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit CardWidget(QWidget *parent = nullptr);
+    ~CardWidget();
+
+    void setSkills(const QVector<SkillInfo> &skills);
+    void addSkill(const SkillInfo &skill);
+    void clearSkills();
+
+    void setCardSize(bool large);
+    bool isLargeMode() const { return m_largeMode; }
+
+    void filter(const QString &text, const QStringList &tags);
+    void filterByFrequency(const QVector<int> &frequencies);
+    void sortBy(const QString &criteria);
+
+    QVector<int> getSelectedSkillIds() const;
+    int getSelectedCount() const;
+    int getTotalCount() const { return m_allSkills.size(); }
+
+signals:
+    void selectionChanged(int count);
+    void cardClicked(int skillId);
+    void frequencyChanged(int skillId, int newFrequency);
+    void agentToggled(int skillId, int agentId, bool enabled);
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
+private slots:
+    void onCardClicked(int skillId);
+    void onCheckBoxToggled(int skillId, bool checked);
+    void relayout();
+
+private:
+    void clearLayout();
+    void layoutCards();
+    bool matchesFilter(const SkillInfo &skill) const;
+    void applyFilter();
+    int calculateColumns() const;
+
+    QVector<SkillInfo> m_allSkills;
+    QVector<SkillCard *> m_cards;
+    QGridLayout *m_gridLayout;
+    bool m_largeMode;
+    QString m_filterText;
+    QStringList m_filterTags;
+    QVector<int> m_filterFrequencies;
+    QString m_sortCriteria;
+};
+
+#endif // CARDWIDGET_H

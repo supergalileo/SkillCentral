@@ -1,0 +1,184 @@
+/****************************************************************************
+** Meta object code from reading C++ file 'test_AgentManager.cpp'
+**
+** Created by: The Qt Meta Object Compiler version 69 (Qt 6.11.1)
+**
+** WARNING! All changes made in this file will be lost!
+*****************************************************************************/
+
+#include <QtCore/qmetatype.h>
+
+#include <QtCore/qtmochelpers.h>
+
+#include <memory>
+
+
+#include <QtCore/qxptype_traits.h>
+#if !defined(Q_MOC_OUTPUT_REVISION)
+#error "The header file 'test_AgentManager.cpp' doesn't include <QObject>."
+#elif Q_MOC_OUTPUT_REVISION != 69
+#error "This file was generated using the moc from 6.11.1. It"
+#error "cannot be used with the include files from this version of Qt."
+#error "(The moc has changed too much.)"
+#endif
+
+#ifndef Q_CONSTINIT
+#define Q_CONSTINIT
+#endif
+
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
+QT_WARNING_DISABLE_GCC("-Wuseless-cast")
+namespace {
+struct qt_meta_tag_ZN16TestAgentManagerE_t {};
+} // unnamed namespace
+
+template <> constexpr inline auto TestAgentManager::qt_create_metaobjectdata<qt_meta_tag_ZN16TestAgentManagerE_t>()
+{
+    namespace QMC = QtMocConstants;
+    QtMocHelpers::StringRefStorage qt_stringData {
+        "TestAgentManager",
+        "initTestCase",
+        "",
+        "cleanupTestCase",
+        "init",
+        "cleanup",
+        "testAddAgent",
+        "testUpdateAgent",
+        "testDeleteAgent",
+        "testSetAgentEnabled",
+        "testGetAgent",
+        "testGetAllAgents",
+        "testEnableSkillForAgent",
+        "testDisableSkillForAgent",
+        "testCopySkillToAgent",
+        "testRemoveSkillFromAgent",
+        "testScanAgentPath",
+        "testScanAllAgents",
+        "testGetAgentEnabledSkills",
+        "testGetSkillEnabledAgents",
+        "testInvalidAgentPath",
+        "testPermissionDenied"
+    };
+
+    QtMocHelpers::UintData qt_methods {
+        // Slot 'initTestCase'
+        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'cleanupTestCase'
+        QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'init'
+        QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'cleanup'
+        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testAddAgent'
+        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testUpdateAgent'
+        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testDeleteAgent'
+        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testSetAgentEnabled'
+        QtMocHelpers::SlotData<void()>(9, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testGetAgent'
+        QtMocHelpers::SlotData<void()>(10, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testGetAllAgents'
+        QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testEnableSkillForAgent'
+        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testDisableSkillForAgent'
+        QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testCopySkillToAgent'
+        QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testRemoveSkillFromAgent'
+        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testScanAgentPath'
+        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testScanAllAgents'
+        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testGetAgentEnabledSkills'
+        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testGetSkillEnabledAgents'
+        QtMocHelpers::SlotData<void()>(19, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testInvalidAgentPath'
+        QtMocHelpers::SlotData<void()>(20, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'testPermissionDenied'
+        QtMocHelpers::SlotData<void()>(21, 2, QMC::AccessPrivate, QMetaType::Void),
+    };
+    QtMocHelpers::UintData qt_properties {
+    };
+    QtMocHelpers::UintData qt_enums {
+    };
+    return QtMocHelpers::metaObjectData<TestAgentManager, qt_meta_tag_ZN16TestAgentManagerE_t>(QMC::MetaObjectFlag{}, qt_stringData,
+            qt_methods, qt_properties, qt_enums);
+}
+Q_CONSTINIT const QMetaObject TestAgentManager::staticMetaObject = { {
+    QMetaObject::SuperData::link<QObject::staticMetaObject>(),
+    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN16TestAgentManagerE_t>.stringdata,
+    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN16TestAgentManagerE_t>.data,
+    qt_static_metacall,
+    nullptr,
+    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN16TestAgentManagerE_t>.metaTypes,
+    nullptr
+} };
+
+void TestAgentManager::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
+{
+    auto *_t = static_cast<TestAgentManager *>(_o);
+    if (_c == QMetaObject::InvokeMetaMethod) {
+        switch (_id) {
+        case 0: _t->initTestCase(); break;
+        case 1: _t->cleanupTestCase(); break;
+        case 2: _t->init(); break;
+        case 3: _t->cleanup(); break;
+        case 4: _t->testAddAgent(); break;
+        case 5: _t->testUpdateAgent(); break;
+        case 6: _t->testDeleteAgent(); break;
+        case 7: _t->testSetAgentEnabled(); break;
+        case 8: _t->testGetAgent(); break;
+        case 9: _t->testGetAllAgents(); break;
+        case 10: _t->testEnableSkillForAgent(); break;
+        case 11: _t->testDisableSkillForAgent(); break;
+        case 12: _t->testCopySkillToAgent(); break;
+        case 13: _t->testRemoveSkillFromAgent(); break;
+        case 14: _t->testScanAgentPath(); break;
+        case 15: _t->testScanAllAgents(); break;
+        case 16: _t->testGetAgentEnabledSkills(); break;
+        case 17: _t->testGetSkillEnabledAgents(); break;
+        case 18: _t->testInvalidAgentPath(); break;
+        case 19: _t->testPermissionDenied(); break;
+        default: ;
+        }
+    }
+    (void)_a;
+}
+
+const QMetaObject *TestAgentManager::metaObject() const
+{
+    return QObject::d_ptr->metaObject ? QObject::d_ptr->dynamicMetaObject() : &staticMetaObject;
+}
+
+void *TestAgentManager::qt_metacast(const char *_clname)
+{
+    if (!_clname) return nullptr;
+    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN16TestAgentManagerE_t>.strings))
+        return static_cast<void*>(this);
+    return QObject::qt_metacast(_clname);
+}
+
+int TestAgentManager::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
+{
+    _id = QObject::qt_metacall(_c, _id, _a);
+    if (_id < 0)
+        return _id;
+    if (_c == QMetaObject::InvokeMetaMethod) {
+        if (_id < 20)
+            qt_static_metacall(this, _c, _id, _a);
+        _id -= 20;
+    }
+    if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
+        if (_id < 20)
+            *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
+        _id -= 20;
+    }
+    return _id;
+}
+QT_WARNING_POP

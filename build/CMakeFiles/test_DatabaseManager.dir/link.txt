@@ -1,0 +1,3 @@
+F:\Qt\Tools\CMake_64\bin\cmake.exe -E rm -f CMakeFiles\test_DatabaseManager.dir/objects.a
+F:\Qt\Tools\mingw1310_64\bin\ar.exe qc CMakeFiles\test_DatabaseManager.dir/objects.a @CMakeFiles\test_DatabaseManager.dir\objects1.rsp
+F:\Qt\Tools\mingw1310_64\bin\g++.exe -g -Wl,--whole-archive CMakeFiles\test_DatabaseManager.dir/objects.a -Wl,--no-whole-archive -o bin\test_DatabaseManager.exe -Wl,--out-implib,libtest_DatabaseManager.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\test_DatabaseManager.dir\linkLibs.rsp

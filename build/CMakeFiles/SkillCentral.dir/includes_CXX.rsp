@@ -1,0 +1,1 @@
+-ID:/workbuddy/SkillCentral/build/SkillCentral_autogen/include -ID:/workbuddy/SkillCentral/include -isystem F:/Qt/6.11.1/mingw_64/include/QtCore -isystem F:/Qt/6.11.1/mingw_64/include -isystem "F:/Qt/6.11.1/mingw_64/mkspecs/win32-g++" -isystem F:/Qt/6.11.1/mingw_64/include/QtWidgets -isystem F:/Qt/6.11.1/mingw_64/include/QtGui -isystem F:/Qt/6.11.1/mingw_64/include/QtSql

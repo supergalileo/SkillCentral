@@ -1,0 +1,15 @@
+D:/workbuddy/SkillCentral/build/CMakeFiles/SkillCentral.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_DatabaseManager.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_SkillManager.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_AgentManager.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/edit_cache.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/rebuild_cache.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/SkillCentral_autogen_timestamp_deps.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/SkillCentral_autogen.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_DatabaseManager_autogen_timestamp_deps.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_DatabaseManager_autogen.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_SkillManager_autogen_timestamp_deps.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_SkillManager_autogen.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_AgentManager_autogen_timestamp_deps.dir
+D:/workbuddy/SkillCentral/build/CMakeFiles/test_AgentManager_autogen.dir
