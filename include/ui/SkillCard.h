@@ -43,7 +43,8 @@ signals:
     void deleteRequested(int skillId);
 
 protected:
-    void mousePressEvent(QMouseEvent *event) override;
+    bool event(QEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:

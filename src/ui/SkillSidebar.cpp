@@ -30,9 +30,6 @@ SkillSidebar::SkillSidebar(QWidget *parent)
     setupUi();
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet("SkillSidebar { background-color: white; border-left: 1px solid #e0e0e0; }");
-    
-    // 设置固定宽度但初始隐藏
-    setFixedWidth(0);
     hide();
 }
 
@@ -52,20 +49,16 @@ void SkillSidebar::setAgentManager(AgentManager *agentManager)
 
 void SkillSidebar::loadSkill(int skillId)
 {
-    // 防重复加载：如果已经在显示同一个 skill，跳过
+    qInfo() << "Sidebar loadSkill:" << skillId;
+
     if (m_isOpen && m_currentSkillId == skillId) {
+        raise();
+        setFocus();
         return;
     }
 
-    // 如果侧边栏当前是打开的（切换不同 skill），先立即重置状态
-    if (m_isOpen) {
-        m_isOpen = false;
-        if (m_animation) {
-            m_animation->stop();
-        }
-        hideOverlay();
-        setFixedWidth(0);
-        hide();
+    if (m_isOpen && m_animation) {
+        m_animation->stop();
     }
 
     m_currentSkillId = skillId;
@@ -81,32 +74,31 @@ void SkillSidebar::loadSkill(int skillId)
 void SkillSidebar::open()
 {
     if (m_isOpen) {
+        raise();
+        setFocus();
         return;
     }
     
     m_isOpen = true;
+    m_sidebarWidth = SIDEBAR_WIDTH;
+    setFixedWidth(SIDEBAR_WIDTH);
     
-    // 显示遮罩
-    showOverlay();
-    
-    // 显示侧边栏
+    // 设置几何尺寸，再显示。
+    if (parentWidget()) {
+        QRect parentRect = parentWidget()->rect();
+        setGeometry(parentRect.width() - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, parentRect.height());
+    }
     show();
-    raise();  // 确保在最上层
+    raise();
     
-    // 启动滑入动画
-    if (!m_animation) {
-        m_animation = new QPropertyAnimation(this, "sidebarWidth", this);
-        m_animation->setDuration(300);
-        m_animation->setEasingCurve(QEasingCurve::OutCubic);
-        connect(m_animation, &QPropertyAnimation::finished, this, &SkillSidebar::onAnimationFinished);
+    // show() 可能改变几何，显示后再确认一次。
+    if (parentWidget()) {
+        QRect parentRect = parentWidget()->rect();
+        setGeometry(parentRect.width() - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, parentRect.height());
     }
     
-    m_animation->stop();
-    m_animation->setStartValue(0);
-    m_animation->setEndValue(SIDEBAR_WIDTH);
-    m_animation->start();
+    qInfo() << "Sidebar opened, geom:" << geometry() << "visible:" << isVisible();
     
-    // 设置焦点以接收键盘事件
     setFocus();
 }
 
@@ -116,32 +108,25 @@ void SkillSidebar::close()
         return;
     }
     
-    // 启动滑出动画
-    if (!m_animation) {
-        m_animation = new QPropertyAnimation(this, "sidebarWidth", this);
-        m_animation->setDuration(300);
-        m_animation->setEasingCurve(QEasingCurve::OutCubic);
-        connect(m_animation, &QPropertyAnimation::finished, this, &SkillSidebar::onAnimationFinished);
-    }
-    
-    m_animation->stop();
-    m_animation->setStartValue(m_sidebarWidth);
-    m_animation->setEndValue(0);
-    m_animation->start();
+    m_isOpen = false;
+    hide();
+    hideOverlay();
+    emit closed();
 }
 
 void SkillSidebar::setSidebarWidth(int width)
 {
     m_sidebarWidth = width;
     setFixedWidth(width);
-    
-    // 调整位置（右侧对齐）
+
     if (parentWidget()) {
         QRect parentRect = parentWidget()->rect();
-        move(parentRect.width() - width, 0);
+        int x = parentRect.width() - width;
+        setGeometry(x, 0, width, parentRect.height());
+        qInfo() << "Sidebar geom:" << x << 0 << width << parentRect.height()
+                << "visible:" << isVisible();
     }
-    
-    // 如果宽度为0，隐藏
+
     if (width <= 0) {
         hide();
         m_isOpen = false;
@@ -188,7 +173,6 @@ void SkillSidebar::setupUi()
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
     
-    // 顶部栏
     m_topBar = createTopBar();
     mainLayout->addWidget(m_topBar);
     
@@ -208,7 +192,6 @@ void SkillSidebar::setupUi()
     // 描述区域
     contentLayout->addWidget(createDescriptionArea());
     
-    // 分隔线
     QFrame *line1 = new QFrame(m_contentWidget);
     line1->setFrameShape(QFrame::HLine);
     line1->setStyleSheet("color: #e0e0e0;");
@@ -217,7 +200,6 @@ void SkillSidebar::setupUi()
     // SKILL.md 内容区域
     contentLayout->addWidget(createContentArea());
     
-    // 分隔线
     QFrame *line2 = new QFrame(m_contentWidget);
     line2->setFrameShape(QFrame::HLine);
     line2->setStyleSheet("color: #e0e0e0;");
@@ -226,7 +208,6 @@ void SkillSidebar::setupUi()
     // 标签区域
     contentLayout->addWidget(createTagsArea());
     
-    // 分隔线
     QFrame *line3 = new QFrame(m_contentWidget);
     line3->setFrameShape(QFrame::HLine);
     line3->setStyleSheet("color: #e0e0e0;");
@@ -259,8 +240,7 @@ void SkillSidebar::updateUi()
     
     // 更新 SKILL.md 内容
     QString skillMdPath = "";
-    // 从 Skill 对象获取 SKILL.md 路径
-    // 这里假设 SkillInfo 有 path 字段
+    // 从 Skill 对象获取 SKILL.md 路径。
     if (!m_currentSkill.path.isEmpty()) {
         skillMdPath = m_currentSkill.path + "/SKILL.md";
         QFile file(skillMdPath);
@@ -287,7 +267,6 @@ void SkillSidebar::updateUi()
 
 void SkillSidebar::updateTagsArea()
 {
-    // 清除旧标签
     QLayoutItem *item;
     QBoxLayout *tagsLayout = qobject_cast<QBoxLayout*>(m_tagsWidget->layout());
     if (!tagsLayout) {
@@ -301,6 +280,10 @@ void SkillSidebar::updateTagsArea()
         }
     }
     
+    QLabel *titleLabel = new QLabel("标签:", m_tagsWidget);
+    titleLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #333;");
+    tagsLayout->addWidget(titleLabel);
+
     // 添加标签
     if (m_dbManager) {
         // 从数据库获取标签
@@ -333,6 +316,10 @@ void SkillSidebar::updateAgentsArea()
         }
     }
     
+    QLabel *titleLabel = new QLabel("启用的 Agent:", m_agentsWidget);
+    titleLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #333;");
+    agentsLayout->addWidget(titleLabel);
+
     // 添加 Agent 复选框
     if (m_agentManager) {
         QVector<AgentInfo> allAgents = m_agentManager->getAllAgents();
@@ -341,7 +328,7 @@ void SkillSidebar::updateAgentsArea()
         for (const AgentInfo &agent : allAgents) {
             QCheckBox *checkBox = new QCheckBox(agent.name, m_agentsWidget);
             checkBox->setChecked(enabledAgents.contains(agent.id));
-            checkBox->setEnabled(false);  // 只读显示
+            checkBox->setEnabled(false);
             agentsLayout->addWidget(checkBox);
         }
     }
@@ -359,7 +346,7 @@ QWidget* SkillSidebar::createTopBar()
     layout->setContentsMargins(12, 0, 12, 0);
     
     // 关闭按钮
-    m_closeButton = new QPushButton("✕", widget);
+    m_closeButton = new QPushButton("X", widget);
     m_closeButton->setFixedSize(32, 32);
     m_closeButton->setStyleSheet("QPushButton { border: none; font-size: 16px; "
                                  "color: #666; border-radius: 16px; }"
@@ -424,11 +411,10 @@ QWidget* SkillSidebar::createTagsArea()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
     
-    QLabel *titleLabel = new QLabel("标签：", m_tagsWidget);
+    QLabel *titleLabel = new QLabel("标签:", m_tagsWidget);
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #333;");
     layout->addWidget(titleLabel);
     
-    // 标签将动态添加
     layout->addStretch();
     
     return m_tagsWidget;
@@ -442,11 +428,10 @@ QWidget* SkillSidebar::createAgentsArea()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
     
-    QLabel *titleLabel = new QLabel("启用的 Agent：", m_agentsWidget);
+    QLabel *titleLabel = new QLabel("启用的 Agent:", m_agentsWidget);
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #333;");
     layout->addWidget(titleLabel);
     
-    // Agent 复选框将动态添加
     QHBoxLayout *agentsLayout = new QHBoxLayout();
     agentsLayout->setContentsMargins(0, 0, 0, 0);
     agentsLayout->addStretch();
@@ -500,7 +485,7 @@ void SkillSidebar::showOverlay()
     
     m_overlay->setGeometry(parentWidget()->rect());
     m_overlay->show();
-    m_overlay->lower();  // 确保在侧边栏下方
+    m_overlay->lower();
 }
 
 void SkillSidebar::hideOverlay()
@@ -515,7 +500,7 @@ void SkillSidebar::paintEvent(QPaintEvent *event)
     Q_UNUSED(event);
     QPainter painter(this);
     
-    // 绘制右侧阴影效果
+    // 缁樺埗鍙充晶闃村奖鏁堟灉
     QLinearGradient gradient(width() - 10, 0, width(), 0);
     gradient.setColorAt(0, QColor(0, 0, 0, 20));
     gradient.setColorAt(1, QColor(0, 0, 0, 0));
@@ -526,7 +511,7 @@ void SkillSidebar::resizeEvent(QResizeEvent *event)
 {
     Q_UNUSED(event);
     
-    // 调整位置（右侧对齐）
+    // 右侧对齐
     if (parentWidget()) {
         QRect parentRect = parentWidget()->rect();
         setGeometry(parentRect.width() - m_sidebarWidth, 0, m_sidebarWidth, parentRect.height());
@@ -550,11 +535,8 @@ void SkillSidebar::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     
-    // 调整位置
-    if (parentWidget()) {
-        QRect parentRect = parentWidget()->rect();
-        setGeometry(parentRect.width() - m_sidebarWidth, 0, m_sidebarWidth, parentRect.height());
-    }
+    // showEvent 中不再调整几何，由 open() 负责。
+    qInfo() << "Sidebar showEvent, geom:" << geometry();
 }
 
 bool SkillSidebar::eventFilter(QObject *watched, QEvent *event)

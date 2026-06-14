@@ -3,7 +3,25 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QLayoutItem>
+#include <QMouseEvent>
 #include <algorithm>
+
+CardScrollArea::CardScrollArea(QWidget *parent)
+    : QScrollArea(parent)
+{
+}
+
+bool CardScrollArea::viewportEvent(QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *me = static_cast<QMouseEvent*>(event);
+        qInfo() << "CardScrollArea viewportEvent: button=" << me->button() << "pos=" << me->pos();
+        if (me->button() == Qt::LeftButton) {
+            emit viewportClicked(me->pos());
+        }
+    }
+    return QScrollArea::viewportEvent(event);
+}
 
 CardWidget::CardWidget(QWidget *parent)
     : QWidget(parent)
@@ -13,6 +31,44 @@ CardWidget::CardWidget(QWidget *parent)
     m_gridLayout = new QGridLayout(this);
     m_gridLayout->setSpacing(12);
     m_gridLayout->setContentsMargins(12, 12, 12, 12);
+}
+
+void CardWidget::onViewportClicked(const QPoint &viewportPos)
+{
+    QScrollArea *scrollArea = qobject_cast<QScrollArea*>(parentWidget());
+    if (!scrollArea) return;
+
+    QPoint posInWidget = scrollArea->viewport()->mapTo(this, viewportPos);
+
+    for (SkillCard *card : m_cards) {
+        if (card->isVisible() && card->geometry().contains(posInWidget)) {
+            qInfo() << "CardWidget: clicked card" << card->getSkillId();
+            emit cardClicked(card->getSkillId());
+            return;
+        }
+    }
+}
+
+bool CardWidget::eventFilter(QObject *obj, QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonPress && obj != this) {
+        QMouseEvent *me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton) {
+            qInfo() << "CardWidget eventFilter on" << obj->metaObject()->className();
+            QWidget *viewport = qobject_cast<QWidget*>(obj);
+            if (viewport) {
+                QPoint posInWidget = viewport->mapTo(this, me->pos());
+                for (SkillCard *card : m_cards) {
+                    if (card->isVisible() && card->geometry().contains(posInWidget)) {
+                        qInfo() << "CardWidget filter: matched card" << card->getSkillId();
+                        emit cardClicked(card->getSkillId());
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 CardWidget::~CardWidget()

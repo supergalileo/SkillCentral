@@ -5,7 +5,6 @@
 #include <QWidget>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QComboBox>
 #include <QLabel>
 #include <QCheckBox>
@@ -19,6 +18,7 @@
 #include "models/SkillManager.h"
 
 class CardWidget;
+class CardScrollArea;
 class SkillSidebar;
 class AgentManager;
 
@@ -117,7 +117,7 @@ private:
     QPushButton *m_toggleSizeBtn;
     QComboBox *m_sortCombo;
 
-    QScrollArea *m_cardScrollArea;
+    CardScrollArea *m_cardScrollArea;
     CardWidget *m_cardWidget;
 
     QLabel *m_statusLabel;

@@ -1,7 +1,7 @@
 #ifndef CARDWIDGET_H
 #define CARDWIDGET_H
 
-#include <QWidget>
+#include <QScrollArea>
 #include <QGridLayout>
 #include <QVector>
 #include <QStringList>
@@ -9,6 +9,17 @@
 #include "database/DatabaseManager.h"
 
 class SkillCard;
+
+class CardScrollArea : public QScrollArea
+{
+    Q_OBJECT
+public:
+    explicit CardScrollArea(QWidget *parent = nullptr);
+signals:
+    void viewportClicked(QPoint pos);
+protected:
+    bool viewportEvent(QEvent *event) override;
+};
 
 class CardWidget : public QWidget
 {
@@ -37,6 +48,9 @@ public:
     int getSelectedCount() const;
     int getTotalCount() const { return m_allSkills.size(); }
 
+public slots:
+    void onViewportClicked(const QPoint &pos);
+
 signals:
     void selectionChanged(int count);
     void cardClicked(int skillId);
@@ -48,6 +62,7 @@ signals:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
     void onCardClicked(int skillId);

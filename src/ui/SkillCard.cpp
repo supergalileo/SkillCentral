@@ -44,7 +44,6 @@ SkillCard::~SkillCard()
 
 void SkillCard::setupUi()
 {
-    // --- 成员控件（生命周期 = 卡片生命周期）---
     m_checkBox = new QCheckBox(this);
     connect(m_checkBox, &QCheckBox::toggled, this, [this](bool checked) {
         emit checkBoxToggled(m_skillId, checked);
@@ -66,7 +65,6 @@ void SkillCard::setupUi()
     m_freqLabel = new QLabel(this);
     m_freqLabel->setCursor(Qt::PointingHandCursor);
     m_freqLabel->setToolTip("点击选择使用频率");
-    connect(m_freqLabel, &QLabel::linkActivated, this, [this]() { showFrequencyMenu(); });
 
     m_tagsWidget = new QWidget(this);
     m_tagsLayout = new QHBoxLayout(m_tagsWidget);
@@ -80,6 +78,24 @@ void SkillCard::setupUi()
 
     m_smallIconLabel = new QLabel(this);
     m_smallIconLabel->setAlignment(Qt::AlignCenter);
+
+    // 在所有子控件上安装事件过滤器，确保点击任何位置都能触发卡片点击
+    for (QObject *child : children()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child)) {
+            w->installEventFilter(this);
+        }
+    }
+    // 标签和按钮的子控件也需要
+    for (QObject *child : m_tagsWidget->children()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child)) {
+            w->installEventFilter(this);
+        }
+    }
+    for (QObject *child : m_agentsWidget->children()) {
+        if (QWidget *w = qobject_cast<QWidget*>(child)) {
+            w->installEventFilter(this);
+        }
+    }
 }
 
 // ============================================================================
@@ -386,23 +402,44 @@ void SkillCard::setChecked(bool checked)
 // 事件处理
 // ============================================================================
 
-void SkillCard::mousePressEvent(QMouseEvent *event)
+bool SkillCard::eventFilter(QObject *obj, QEvent *event)
 {
-    QWidget::mousePressEvent(event);
-
-    QWidget *child = childAt(event->pos());
-    if (child && (dynamic_cast<QAbstractButton *>(child) ||
-                  child == m_smallIconLabel)) {
-        return;
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton) {
+            // 检查点击的是否是按钮或复选框（这些需要保留原始行为）
+            QWidget *w = qobject_cast<QWidget*>(obj);
+            if (w && (dynamic_cast<QAbstractButton*>(w))) {
+                // 按钮点击：让按钮正常处理
+                return false;
+            }
+            qInfo() << "SkillCard eventFilter: emitting cardClicked" << m_skillId;
+            emit cardClicked(m_skillId);
+            return true;  // 拦截事件
+        }
     }
+    return QWidget::eventFilter(obj, event);
+}
 
-    // 点击频率标签区域 → 打开频率菜单
-    if (child == m_freqLabel) {
-        showFrequencyMenu();
-        return;
+bool SkillCard::event(QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton) {
+            QWidget *child = childAt(me->pos());
+            if (child && (dynamic_cast<QAbstractButton*>(child) || child == m_smallIconLabel)) {
+                return QWidget::event(event);
+            }
+            if (child == m_freqLabel) {
+                showFrequencyMenu();
+                return true;
+            }
+            qInfo() << "Card clicked:" << m_name << "ID=" << m_skillId;
+            emit cardClicked(m_skillId);
+            return true;
+        }
     }
-
-    emit cardClicked(m_skillId);
+    return QWidget::event(event);
 }
 
 void SkillCard::contextMenuEvent(QContextMenuEvent *event)

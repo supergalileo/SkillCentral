@@ -12,7 +12,7 @@ void logMessage(QtMsgType type, const QMessageLogContext &context, const QString
 {
     Q_UNUSED(context);
     QFile file("D:/skillLibrary/logs/startup.log");
-    file.open(QIODevice::Append | QIODevice::Text);
+    file.open(QIODevice::Append | QIODevice::Text | QIODevice::Unbuffered);
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf8);
     QString prefix;
@@ -24,6 +24,7 @@ void logMessage(QtMsgType type, const QMessageLogContext &context, const QString
         case QtFatalMsg: prefix = "[FATAL]"; break;
     }
     out << QDateTime::currentDateTime().toString("hh:mm:ss") << " " << prefix << " " << msg << "\n";
+    out.flush();
 }
 
 int main(int argc, char *argv[])

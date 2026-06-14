@@ -226,7 +226,7 @@ void MainWindow::setupUi()
     mainLayout->addWidget(freqWidget);
 
     // ===== 卡片区域 =====
-    m_cardScrollArea = new QScrollArea(this);
+    m_cardScrollArea = new CardScrollArea(this);
     m_cardScrollArea->setWidgetResizable(true);
     m_cardScrollArea->setStyleSheet(
         "QScrollArea { border: 1px solid #e0e0e0; border-radius: 6px; "
@@ -235,6 +235,11 @@ void MainWindow::setupUi()
 
     m_cardWidget = new CardWidget(m_cardScrollArea);
     m_cardScrollArea->setWidget(m_cardWidget);
+
+    connect(m_cardScrollArea, &CardScrollArea::viewportClicked, m_cardWidget, &CardWidget::onViewportClicked);
+
+    // 额外保障：在 viewport 上安装事件过滤器
+    m_cardScrollArea->viewport()->installEventFilter(m_cardWidget);
 
     connect(m_cardWidget, &CardWidget::cardClicked, this, &MainWindow::onCardClicked);
     connect(m_cardWidget, &CardWidget::selectionChanged, this, &MainWindow::onSelectionChanged);
