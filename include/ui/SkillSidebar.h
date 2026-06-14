@@ -93,29 +93,10 @@ signals:
     void closed();
 
 protected:
-    /**
-     * @brief 绘制事件（绘制阴影）
-     */
     void paintEvent(QPaintEvent *event) override;
-
-    /**
-     * @brief 调整大小事件
-     */
     void resizeEvent(QResizeEvent *event) override;
-
-    /**
-     * @brief 按键事件（处理 Escape 键）
-     */
     void keyPressEvent(QKeyEvent *event) override;
-
-    /**
-     * @brief 显示事件
-     */
     void showEvent(QShowEvent *event) override;
-
-    /**
-     * @brief 事件过滤器（处理遮罩点击）
-     */
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
@@ -246,7 +227,16 @@ private:
     // 状态
     bool m_isOpen;
     int m_sidebarWidth;
-    static const int SIDEBAR_WIDTH = 400;
+    static constexpr int SIDEBAR_WIDTH = 400;
+    static constexpr int MIN_SIDEBAR_WIDTH = 250;
+    static constexpr int MAX_SIDEBAR_WIDTH = 800;
+
+    // 拖拽调整宽度
+    QWidget *m_resizeHandle;
+    bool m_dragging;
+    int m_dragStartX;
+    int m_dragStartWidth;
+    static constexpr int HANDLE_WIDTH = 5;
 };
 
 #endif // SKILLSIDEBAR_H

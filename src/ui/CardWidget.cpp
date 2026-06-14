@@ -4,11 +4,14 @@
 #include <QScrollArea>
 #include <QLayoutItem>
 #include <QMouseEvent>
+#include <QTimer>
 #include <algorithm>
 
 CardScrollArea::CardScrollArea(QWidget *parent)
     : QScrollArea(parent)
 {
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    viewport()->setAutoFillBackground(false);
 }
 
 bool CardScrollArea::viewportEvent(QEvent *event)
@@ -31,6 +34,8 @@ CardWidget::CardWidget(QWidget *parent)
     m_gridLayout = new QGridLayout(this);
     m_gridLayout->setSpacing(12);
     m_gridLayout->setContentsMargins(12, 12, 12, 12);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setMinimumWidth(0);
 }
 
 void CardWidget::onViewportClicked(const QPoint &viewportPos)
@@ -332,8 +337,15 @@ void CardWidget::clearLayout()
 
 int CardWidget::calculateColumns() const
 {
-    int cardWidth = m_largeMode ? 262 : 152;
+    int cardWidth = m_largeMode ? 302 : 152;
     int availableWidth = width();
+    // 使用 viewport 宽度限制，防止全屏恢复后列数超出边界
+    if (parentWidget()) {
+        QScrollArea *scrollArea = qobject_cast<QScrollArea*>(parentWidget()->parentWidget());
+        if (scrollArea && scrollArea->viewport()) {
+            availableWidth = qMin(availableWidth, scrollArea->viewport()->width());
+        }
+    }
     if (availableWidth <= 0) availableWidth = 800;
     int cols = qMax(1, availableWidth / cardWidth);
     return cols;
@@ -342,5 +354,9 @@ int CardWidget::calculateColumns() const
 void CardWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    relayout();
+
+    // 强制重新计算布局，防止全屏恢复后列数异常
+    QTimer::singleShot(0, this, [this]() {
+        relayout();
+    });
 }

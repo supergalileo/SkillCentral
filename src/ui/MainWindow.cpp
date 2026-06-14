@@ -110,9 +110,9 @@ void MainWindow::setupUi()
     m_searchEdit->setPlaceholderText("搜索 skill 名称或标签");
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setStyleSheet(
-        "QLineEdit { padding: 6px 10px; border: 1px solid #ccc; "
-        "border-radius: 6px; font-size: 13px; }"
-        "QLineEdit:focus { border: 1px solid #4a90d9; }"
+        "QLineEdit { padding: 7px 12px; border: 1px solid #d0d0d0; "
+        "border-radius: 8px; font-size: 13px; background-color: #fafafa; }"
+        "QLineEdit:focus { border: 1px solid #4a90d9; background-color: #ffffff; }"
     );
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
     mainLayout->addWidget(m_searchEdit);
@@ -141,14 +141,33 @@ void MainWindow::setupUi()
     toolbarLayout->setContentsMargins(0, 0, 0, 0);
     toolbarLayout->setSpacing(6);
 
+    QString checkBoxStyle =
+        "QCheckBox { spacing: 6px; font-size: 12px; color: #555; }"
+        "QCheckBox::indicator { width: 16px; height: 16px; border: 2px solid #ccc; "
+        "border-radius: 4px; background-color: #ffffff; }"
+        "QCheckBox::indicator:hover { border-color: #4a90d9; }"
+        "QCheckBox::indicator:checked { background-color: #4a90d9; border-color: #4a90d9; }";
+
     m_selectAllCheck = new QCheckBox("全选", this);
+    m_selectAllCheck->setStyleSheet(checkBoxStyle);
     connect(m_selectAllCheck, &QCheckBox::toggled, this, &MainWindow::onSelectAllClicked);
     toolbarLayout->addWidget(m_selectAllCheck);
 
+    // 全局按钮统一样式
+    QString btnStyle = 
+        "QPushButton { padding: 5px 14px; border: 1px solid #d0d0d0; "
+        "border-radius: 6px; font-size: 12px; background-color: #ffffff; color: #333; }"
+        "QPushButton:hover { background-color: #f0f4ff; border-color: #4a90d9; color: #4a90d9; }"
+        "QPushButton:pressed { background-color: #e0e8ff; }";
+
     m_batchEnableBtn = new QPushButton("启用▼", this);
+    m_batchEnableBtn->setStyleSheet(btnStyle);
     m_batchDisableBtn = new QPushButton("禁用", this);
+    m_batchDisableBtn->setStyleSheet(btnStyle);
     m_batchDeleteBtn = new QPushButton("删除", this);
+    m_batchDeleteBtn->setStyleSheet(btnStyle);
     m_batchTagBtn = new QPushButton("打标签", this);
+    m_batchTagBtn->setStyleSheet(btnStyle);
 
     connect(m_batchEnableBtn, &QPushButton::clicked, this, &MainWindow::onBatchEnableClicked);
     connect(m_batchDisableBtn, &QPushButton::clicked, this, &MainWindow::onBatchDisableClicked);
@@ -163,6 +182,7 @@ void MainWindow::setupUi()
     toolbarLayout->addStretch();
 
     m_toggleSizeBtn = new QPushButton("切换到小卡片", this);
+    m_toggleSizeBtn->setStyleSheet(btnStyle);
     connect(m_toggleSizeBtn, &QPushButton::clicked, this, &MainWindow::onToggleCardSize);
     toolbarLayout->addWidget(m_toggleSizeBtn);
 
@@ -171,6 +191,13 @@ void MainWindow::setupUi()
     m_sortCombo->addItem("按名称");
     m_sortCombo->addItem("按导入时间");
     m_sortCombo->addItem("按最后使用");
+    m_sortCombo->setStyleSheet(
+        "QComboBox { padding: 4px 10px; border: 1px solid #d0d0d0; "
+        "border-radius: 6px; font-size: 12px; background-color: #ffffff; color: #333; min-width: 100px; }"
+        "QComboBox:hover { border-color: #4a90d9; }"
+        "QComboBox::drop-down { border: none; width: 20px; }"
+        "QComboBox QAbstractItemView { selection-background-color: #e8f0fe; selection-color: #4a90d9; }"
+    );
     connect(m_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onSortChanged);
     toolbarLayout->addWidget(m_sortCombo);
@@ -180,9 +207,9 @@ void MainWindow::setupUi()
     // 刷新按钮
     m_refreshBtn = new QPushButton("🔄 刷新", this);
     m_refreshBtn->setStyleSheet(
-        "QPushButton { padding: 4px 12px; border: 1px solid #ccc; "
-        "border-radius: 4px; font-size: 12px; }"
-        "QPushButton:hover { background-color: #f0f0f0; }"
+        "QPushButton { padding: 5px 14px; border: 1px solid #d0d0d0; "
+        "border-radius: 6px; font-size: 12px; background-color: #ffffff; color: #333; }"
+        "QPushButton:hover { background-color: #f0f4ff; border-color: #4a90d9; color: #4a90d9; }"
     );
     m_refreshBtn->setToolTip("重新扫描 agent 路径，同步 skill 到中央库");
     connect(m_refreshBtn, &QPushButton::clicked, this, &MainWindow::onRefreshClicked);

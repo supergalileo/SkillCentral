@@ -45,6 +45,12 @@ SkillCard::~SkillCard()
 void SkillCard::setupUi()
 {
     m_checkBox = new QCheckBox(this);
+    m_checkBox->setStyleSheet(
+        "QCheckBox::indicator { width: 14px; height: 14px; border: 2px solid #ccc; "
+        "border-radius: 3px; background-color: #ffffff; }"
+        "QCheckBox::indicator:hover { border-color: #4a90d9; }"
+        "QCheckBox::indicator:checked { background-color: #4a90d9; border-color: #4a90d9; }"
+    );
     connect(m_checkBox, &QCheckBox::toggled, this, [this](bool checked) {
         emit checkBoxToggled(m_skillId, checked);
     });
@@ -108,7 +114,7 @@ void SkillCard::applyStyle()
         SkillCard {
             background-color: #ffffff;
             border: 1px solid #d0d0d0;
-            border-radius: 8px;
+            border-radius: 14px;
         }
         SkillCard:hover {
             border: 1px solid #4a90d9;
@@ -146,11 +152,12 @@ void SkillCard::updateData()
     }
     m_nameLabel->setFont(nameFont);
 
-    // 描述 — 小字号以在有限空间内显示约8行
+    // 描述 — 最多显示两行，多余截断
     if (!m_description.isEmpty()) {
-        QString desc = m_description.length() > 400 ? m_description.left(400) + "..." : m_description;
+        QString desc = m_description.length() > 80 ? m_description.left(80) + "..." : m_description;
         m_descLabel->setText(desc);
         m_descLabel->setStyleSheet("color: #666666; font-size: 9px; line-height: 130%;");
+        m_descLabel->setFixedHeight(24);
     }
 
     // 标签 — 始终显示标签区域
@@ -271,7 +278,7 @@ void SkillCard::arrangeLayout()
     }
 
     if (m_largeMode) {
-        setFixedSize(260, 210);
+        setFixedSize(300, 150);
         arrangeLargeMode();
     } else {
         setFixedSize(150, 110);
@@ -287,29 +294,30 @@ void SkillCard::arrangeLargeMode()
     mainLayout->setContentsMargins(8, 6, 8, 6);
     mainLayout->setSpacing(4);
 
-    // === 第1行：频率圆点 + 频率文字(左) + 名称(中) + 多选框(右) ===
+    // === 第1行：频率圆点 + 频率文字 + 多选框(右) ===
     QHBoxLayout *topRow = new QHBoxLayout();
     topRow->setContentsMargins(0, 0, 0, 0);
     topRow->setSpacing(4);
     topRow->addWidget(m_freqButton);       // 频率圆点
     topRow->addWidget(m_freqLabel);        // 频率文字
-
-    m_nameLabel->setWordWrap(false);
-    m_nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    m_nameLabel->setStyleSheet("color: #333;");
-    topRow->addWidget(m_nameLabel, 1);    // 名称（占满剩余空间）
-
+    topRow->addStretch();
     topRow->addWidget(m_checkBox);         // 多选框
     mainLayout->addLayout(topRow);
 
-    // === 第2行：描述 ===
+    // === 第2行：名称（左对齐） ===
+    m_nameLabel->setWordWrap(true);
+    m_nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_nameLabel->setStyleSheet("color: #333;");
+    mainLayout->addWidget(m_nameLabel);
+
+    // === 第3行：描述（缩减） ===
     if (!m_description.isEmpty()) {
         m_descLabel->setWordWrap(true);
         m_descLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
         mainLayout->addWidget(m_descLabel);
     }
 
-    // === 第3行：标签 ===
+    // === 第4行：标签 ===
     mainLayout->addWidget(m_tagsWidget);
 
     // 弹性空间推到底部

@@ -11,6 +11,8 @@
 #include <QPainter>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QMouseEvent>
+#include <QCursor>
 #include <QFile>
 #include <QTextStream>
 #include <QMessageBox>
@@ -38,6 +40,10 @@ SkillSidebar::SkillSidebar(QWidget *parent)
     , m_editButton(nullptr)
     , m_deleteButton(nullptr)
     , m_exportButton(nullptr)
+    , m_resizeHandle(nullptr)
+    , m_dragging(false)
+    , m_dragStartX(0)
+    , m_dragStartWidth(0)
 {
     setupUi();
     if (parentWidget()) {
@@ -95,13 +101,15 @@ void SkillSidebar::open()
     }
     
     m_isOpen = true;
-    m_sidebarWidth = SIDEBAR_WIDTH;
-    setFixedWidth(SIDEBAR_WIDTH);
+    if (m_sidebarWidth <= 0) {
+        m_sidebarWidth = SIDEBAR_WIDTH;
+    }
+    setFixedWidth(m_sidebarWidth);
     
     // 设置几何尺寸，再显示。
     if (parentWidget()) {
         QRect parentRect = parentWidget()->rect();
-        setGeometry(parentRect.width() - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, parentRect.height());
+        setGeometry(parentRect.width() - m_sidebarWidth, 0, m_sidebarWidth, parentRect.height());
     }
     show();
     raise();
@@ -109,7 +117,13 @@ void SkillSidebar::open()
     // show() 可能改变几何，显示后再确认一次。
     if (parentWidget()) {
         QRect parentRect = parentWidget()->rect();
-        setGeometry(parentRect.width() - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, parentRect.height());
+        setGeometry(parentRect.width() - m_sidebarWidth, 0, m_sidebarWidth, parentRect.height());
+    }
+    
+    // 确保拖拽手柄位于最上层
+    if (m_resizeHandle) {
+        m_resizeHandle->setGeometry(0, 0, HANDLE_WIDTH, height());
+        m_resizeHandle->raise();
     }
     
     qInfo() << "Sidebar opened, geom:" << geometry() << "visible:" << isVisible();
@@ -185,8 +199,15 @@ void SkillSidebar::setupUi()
 {
     // 主布局
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setContentsMargins(HANDLE_WIDTH, 0, 0, 0);
     mainLayout->setSpacing(0);
+
+    // 拖拽手柄（左侧边缘，透明但可点击）
+    m_resizeHandle = new QWidget(this);
+    m_resizeHandle->setFixedWidth(HANDLE_WIDTH);
+    m_resizeHandle->setCursor(Qt::SizeHorCursor);
+    m_resizeHandle->installEventFilter(this);
+    m_resizeHandle->raise();
     
     m_topBar = createTopBar();
     mainLayout->addWidget(m_topBar);
@@ -196,6 +217,8 @@ void SkillSidebar::setupUi()
     m_contentBrowser->setStyleSheet("QTextBrowser { border: none; padding: 16px; background-color: #fafafa; }");
     mainLayout->addWidget(m_contentBrowser, 1);
 }
+
+
 
 void SkillSidebar::updateUi()
 {
@@ -454,8 +477,14 @@ void SkillSidebar::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter painter(this);
+
+    // 左侧拖拽手柄视觉提示
+    painter.fillRect(0, 0, HANDLE_WIDTH, height(), QColor(0, 0, 0, 10));
+    // 手柄左边框线
+    painter.setPen(QColor(0, 0, 0, 30));
+    painter.drawLine(0, 0, 0, height());
     
-    // 缁樺埗鍙充晶闃村奖鏁堟灉
+    // 右侧阴影
     QLinearGradient gradient(width() - 10, 0, width(), 0);
     gradient.setColorAt(0, QColor(0, 0, 0, 20));
     gradient.setColorAt(1, QColor(0, 0, 0, 0));
@@ -475,6 +504,12 @@ void SkillSidebar::resizeEvent(QResizeEvent *event)
             m_overlay->setGeometry(parentRect);
         }
     }
+    
+    // 更新拖拽手柄位置
+    if (m_resizeHandle) {
+        m_resizeHandle->setGeometry(0, 0, HANDLE_WIDTH, height());
+        m_resizeHandle->raise();
+    }
 }
 
 void SkillSidebar::keyPressEvent(QKeyEvent *event)
@@ -490,12 +525,49 @@ void SkillSidebar::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     
-    // showEvent 中不再调整几何，由 open() 负责。
+    if (m_resizeHandle) {
+        m_resizeHandle->setGeometry(0, 0, HANDLE_WIDTH, height());
+        m_resizeHandle->raise();
+    }
+    
     qInfo() << "Sidebar showEvent, geom:" << geometry();
 }
 
 bool SkillSidebar::eventFilter(QObject *watched, QEvent *event)
 {
+    // 拖拽手柄鼠标事件
+    if (watched == m_resizeHandle) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::LeftButton) {
+                m_dragging = true;
+                m_dragStartX = me->globalPosition().toPoint().x();
+                m_dragStartWidth = m_sidebarWidth;
+                setCursor(Qt::SizeHorCursor);
+                return true;
+            }
+        } else if (event->type() == QEvent::MouseMove && m_dragging) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            int delta = m_dragStartX - me->globalPosition().toPoint().x();
+            int newWidth = qBound(MIN_SIDEBAR_WIDTH, m_dragStartWidth + delta, MAX_SIDEBAR_WIDTH);
+            m_sidebarWidth = newWidth;
+            setFixedWidth(newWidth);
+            if (parentWidget()) {
+                QRect parentRect = parentWidget()->rect();
+                setGeometry(parentRect.width() - newWidth, 0, newWidth, parentRect.height());
+            }
+            return true;
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::LeftButton && m_dragging) {
+                m_dragging = false;
+                setCursor(Qt::ArrowCursor);
+                return true;
+            }
+        }
+        return false;
+    }
+    
     if (watched == m_overlay && event->type() == QEvent::MouseButtonPress) {
         close();
         return true;
@@ -503,10 +575,9 @@ bool SkillSidebar::eventFilter(QObject *watched, QEvent *event)
 
     if (watched == parentWidget() && event->type() == QEvent::Resize && isVisible()) {
         QRect parentRect = parentWidget()->rect();
-        int width = m_isOpen ? SIDEBAR_WIDTH : m_sidebarWidth;
-        if (width > 0) {
-            m_sidebarWidth = width;
-            setGeometry(parentRect.width() - width, 0, width, parentRect.height());
+        int w = m_sidebarWidth > 0 ? m_sidebarWidth : SIDEBAR_WIDTH;
+        if (w > 0) {
+            setGeometry(parentRect.width() - w, 0, w, parentRect.height());
         }
         if (m_overlay) {
             m_overlay->setGeometry(parentRect);
