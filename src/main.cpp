@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QIcon>
 #include "ui/MainWindow.h"
 #include "database/DatabaseManager.h"
 #include <QMessageBox>
@@ -31,6 +32,7 @@ void logMessage(QtMsgType type, const QMessageLogContext &context, const QString
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    app.setWindowIcon(QIcon(":/icons/appicon.png"));
 
     // 安装日志钩子（必须在 QApplication 之后）
     QDir().mkpath("D:/skillLibrary/logs");

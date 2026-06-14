@@ -17,6 +17,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+# === 资源文件 ===
+set(RESOURCES
+    resources/resources.qrc
+)
+if(WIN32)
+    list(APPEND RESOURCES resources/icon.rc)
+endif()
+
 # === 源文件 ===
 set(SOURCES
     # 数据库模块
@@ -60,8 +68,9 @@ set(HEADERS
 )
 
 # === 主程序 ===
-add_executable(SkillCentral ${SOURCES} ${HEADERS})
+add_executable(SkillCentral ${SOURCES} ${HEADERS} ${RESOURCES})
 target_link_libraries(SkillCentral Qt6::Core Qt6::Widgets Qt6::Sql Qt6::Concurrent)
+set_target_properties(SkillCentral PROPERTIES WIN32_EXECUTABLE TRUE)
 
 # === 测试 ===
 enable_testing()
