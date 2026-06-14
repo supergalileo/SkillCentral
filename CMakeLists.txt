@@ -11,7 +11,7 @@ set(CMAKE_AUTOUIC ON)
 
 # Qt6 路径 - 请根据实际安装版本调整 6.x.y
 set(Qt6_DIR "F:/Qt/6.11.1/mingw_64/lib/cmake/Qt6" CACHE PATH "Qt6 CMake 路径")
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Sql Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Sql Concurrent Test)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -61,7 +61,7 @@ set(HEADERS
 
 # === 主程序 ===
 add_executable(SkillCentral ${SOURCES} ${HEADERS})
-target_link_libraries(SkillCentral Qt6::Core Qt6::Widgets Qt6::Sql)
+target_link_libraries(SkillCentral Qt6::Core Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 
 # === 测试 ===
 enable_testing()

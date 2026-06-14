@@ -32,8 +32,6 @@ SettingsDialog::SettingsDialog(DatabaseManager *dbManager, AgentManager *agentMa
     , m_autoScanCheck(nullptr)
     , m_autoBackupCheck(nullptr)
     , m_backupFrequencyCombo(nullptr)
-    , m_themeCombo(nullptr)
-    , m_themeWarningLabel(nullptr)
     , m_agentTable(nullptr)
     , m_addAgentButton(nullptr)
     , m_editAgentButton(nullptr)
@@ -73,15 +71,7 @@ void SettingsDialog::onResetLibraryPath()
     m_libraryPathEdit->setText(getDefaultLibraryPath());
 }
 
-void SettingsDialog::onThemeChanged(int index)
-{
-    QString theme = m_themeCombo->itemText(index);
-    if (theme == "深色") {
-        m_themeWarningLabel->setText("（主题切换需要重启生效）");
-    } else {
-        m_themeWarningLabel->setText("（主题切换需要重启生效）");
-    }
-}
+    
 
 void SettingsDialog::onAddAgent()
 {
@@ -376,6 +366,7 @@ QWidget *SettingsDialog::setupGeneralTab()
     pathLayout->addWidget(browseButton);
     pathLayout->addWidget(resetButton);
     pathGroup->setLayout(pathLayout);
+    mainLayout->addWidget(pathGroup);
 
     // 启动选项
     QGroupBox *startupGroup = new QGroupBox("启动选项");
@@ -387,6 +378,7 @@ QWidget *SettingsDialog::setupGeneralTab()
     startupLayout->addWidget(m_autoScanCheck);
     startupLayout->addWidget(m_autoBackupCheck);
     startupGroup->setLayout(startupLayout);
+    mainLayout->addWidget(startupGroup);
 
     // 自动备份频率
     QGroupBox *backupGroup = new QGroupBox("自动备份");
@@ -397,27 +389,8 @@ QWidget *SettingsDialog::setupGeneralTab()
 
     backupLayout->addRow("自动备份频率:", m_backupFrequencyCombo);
     backupGroup->setLayout(backupLayout);
-
-    // 主题
-    QGroupBox *themeGroup = new QGroupBox("主题");
-    QFormLayout *themeLayout = new QFormLayout();
-
-    m_themeCombo = new QComboBox(themeGroup);
-    m_themeCombo->addItems({"浅色", "深色"});
-    connect(m_themeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &SettingsDialog::onThemeChanged);
-
-    m_themeWarningLabel = new QLabel("（主题切换需要重启生效）", themeGroup);
-    m_themeWarningLabel->setStyleSheet("color: gray;");
-
-    themeLayout->addRow("主题:", m_themeCombo);
-    themeLayout->addRow("", m_themeWarningLabel);
-    themeGroup->setLayout(themeLayout);
-
-    mainLayout->addWidget(pathGroup);
-    mainLayout->addWidget(startupGroup);
     mainLayout->addWidget(backupGroup);
-    mainLayout->addWidget(themeGroup);
+
     mainLayout->addStretch();
 
     return tab;
@@ -594,12 +567,7 @@ void SettingsDialog::loadSettings()
         m_backupFrequencyCombo->setCurrentIndex(index);
     }
 
-    // 主题
-    QString theme = m_dbManager->getSetting("theme", "浅色");
-    index = m_themeCombo->findText(theme);
-    if (index >= 0) {
-        m_themeCombo->setCurrentIndex(index);
-    }
+
 }
 
 void SettingsDialog::saveSettings()
@@ -616,8 +584,7 @@ void SettingsDialog::saveSettings()
     // 自动备份频率
     m_dbManager->setSetting("backupFrequency", m_backupFrequencyCombo->currentText());
 
-    // 主题
-    m_dbManager->setSetting("theme", m_themeCombo->currentText());
+
 }
 
 void SettingsDialog::refreshAgents()
@@ -723,8 +690,7 @@ void SettingsDialog::accept()
     QString newPath = m_libraryPathEdit->text();
     emit libraryPathChanged(newPath);
 
-    QString theme = m_themeCombo->currentText();
-    emit themeChanged(theme == "深色" ? "dark" : "light");
+
 
     QDialog::accept();
 }

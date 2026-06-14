@@ -48,6 +48,9 @@ public:
     int getSelectedCount() const;
     int getTotalCount() const { return m_allSkills.size(); }
 
+    // 全选/取消全选当前可见的卡片
+    void selectAll(bool checked);
+
 public slots:
     void onViewportClicked(const QPoint &pos);
 
@@ -59,6 +62,8 @@ signals:
     void tagAddRequested(int skillId);
     void tagRemoveRequested(int skillId, const QString &tag);
     void deleteRequested(int skillId);
+    void openFolderRequested(int skillId);
+    void agentFolderRequested(int skillId, int agentId);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

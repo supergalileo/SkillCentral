@@ -6,6 +6,7 @@
 #include <QTextStream>
 #include <QDateTime>
 #include <QDir>
+#include <QScreen>
 
 // 崩溃日志输出到 startup.log
 void logMessage(QtMsgType type, const QMessageLogContext &context, const QString &msg)
@@ -63,6 +64,12 @@ int main(int argc, char *argv[])
     qInfo() << "MainWindow created, calling setDatabaseManager...";
     window.setDatabaseManager(dbManager);
     qInfo() << "setDatabaseManager done, showing window...";
+    // 居中显示窗口
+    if (QScreen *screen = QApplication::primaryScreen()) {
+        QRect screenGeometry = screen->availableGeometry();
+        window.move((screenGeometry.width() - window.width()) / 2,
+                     (screenGeometry.height() - window.height()) / 2);
+    }
     window.show();
     qInfo() << "Window shown, entering event loop";
 

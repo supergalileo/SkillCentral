@@ -13,7 +13,7 @@ CardScrollArea::CardScrollArea(QWidget *parent)
 
 bool CardScrollArea::viewportEvent(QEvent *event)
 {
-    if (event->type() == QEvent::MouseButtonPress) {
+    if (event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent *me = static_cast<QMouseEvent*>(event);
         qInfo() << "CardScrollArea viewportEvent: button=" << me->button() << "pos=" << me->pos();
         if (me->button() == Qt::LeftButton) {
@@ -51,7 +51,7 @@ void CardWidget::onViewportClicked(const QPoint &viewportPos)
 
 bool CardWidget::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::MouseButtonPress && obj != this) {
+    if (event->type() == QEvent::MouseButtonDblClick && obj != this) {
         QMouseEvent *me = static_cast<QMouseEvent*>(event);
         if (me->button() == Qt::LeftButton) {
             qInfo() << "CardWidget eventFilter on" << obj->metaObject()->className();
@@ -90,6 +90,8 @@ void CardWidget::setSkills(const QVector<SkillInfo> &skills)
         connect(card, &SkillCard::tagAddRequested, this, &CardWidget::tagAddRequested);
         connect(card, &SkillCard::tagRemoveRequested, this, &CardWidget::tagRemoveRequested);
         connect(card, &SkillCard::deleteRequested, this, &CardWidget::deleteRequested);
+        connect(card, &SkillCard::openFolderRequested, this, &CardWidget::openFolderRequested);
+        connect(card, &SkillCard::agentFolderRequested, this, &CardWidget::agentFolderRequested);
         card->setAgentList(m_agentList);
         m_cards.append(card);
     }
@@ -116,6 +118,8 @@ void CardWidget::addSkill(const SkillInfo &skill)
     connect(card, &SkillCard::tagAddRequested, this, &CardWidget::tagAddRequested);
     connect(card, &SkillCard::tagRemoveRequested, this, &CardWidget::tagRemoveRequested);
     connect(card, &SkillCard::deleteRequested, this, &CardWidget::deleteRequested);
+    connect(card, &SkillCard::openFolderRequested, this, &CardWidget::openFolderRequested);
+    connect(card, &SkillCard::agentFolderRequested, this, &CardWidget::agentFolderRequested);
     card->setAgentList(m_agentList);
     m_cards.append(card);
     filter(m_filterText, m_filterTags);
@@ -166,6 +170,16 @@ void CardWidget::filter(const QString &text, const QStringList &tags)
     m_filterText = text;
     m_filterTags = tags;
     applyFilter();
+}
+
+void CardWidget::selectAll(bool checked)
+{
+    for (SkillCard *card : m_cards) {
+        if (card->isVisible()) {
+            card->setChecked(checked);
+        }
+    }
+    emit selectionChanged(getSelectedCount());
 }
 
 void CardWidget::filterByFrequency(const QVector<int> &frequencies)

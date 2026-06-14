@@ -37,7 +37,6 @@ signals:
     void settingsChanged();
     void agentsChanged();
     void libraryPathChanged(const QString &newPath);
-    void themeChanged(const QString &theme);
 
 protected:
     void accept() override;
@@ -47,7 +46,6 @@ private slots:
     // 常规标签页
     void onBrowseLibraryPath();
     void onResetLibraryPath();
-    void onThemeChanged(int index);
 
     // Agent 管理标签页
     void onAddAgent();
@@ -89,8 +87,6 @@ private:
     QCheckBox *m_autoScanCheck;
     QCheckBox *m_autoBackupCheck;
     QComboBox *m_backupFrequencyCombo;
-    QComboBox *m_themeCombo;
-    QLabel *m_themeWarningLabel;
 
     // Agent 管理标签页
     QTableWidget *m_agentTable;

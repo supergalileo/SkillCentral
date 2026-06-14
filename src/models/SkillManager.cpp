@@ -464,6 +464,26 @@ bool SkillManager::deleteSkill(int skillId, bool deleteFromAgents)
         return false;
     }
 
+    // 从所有已启用的 Agent 中删除 skill 文件夹
+    if (deleteFromAgents) {
+        QVector<int> agentIds = m_dbManager->getSkillEnabledAgents(skillId);
+        for (int agentId : agentIds) {
+            AgentInfo agent = m_dbManager->getAgent(agentId);
+            if (agent.id == -1 || agent.path.isEmpty()) continue;
+
+            // skill 文件夹名 = 数据库中记录的路径的最后一部分
+            QString folderName = QFileInfo(skillInfo.path).fileName();
+            if (folderName.isEmpty()) folderName = skillInfo.name;
+
+            QString agentSkillPath = QDir::cleanPath(agent.path + "/" + folderName);
+            QDir agentSkillDir(agentSkillPath);
+            if (agentSkillDir.exists()) {
+                qInfo() << "Removing skill from agent" << agent.name << ":" << agentSkillPath;
+                agentSkillDir.removeRecursively();
+            }
+        }
+    }
+
     // Delete skill folder
     QDir skillDir(skillInfo.path);
     if (skillDir.exists()) {

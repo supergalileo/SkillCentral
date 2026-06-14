@@ -188,7 +188,7 @@ void SkillCard::updateData()
         // 每个 agent 使用固定的颜色和首字母
         QString initial;
         if (agent.name.contains("Claude", Qt::CaseInsensitive)) {
-            initial = "CL";
+            initial = "CC";
         } else if (agent.name.contains("Codex", Qt::CaseInsensitive)) {
             initial = "CO";
         } else {
@@ -233,6 +233,19 @@ void SkillCard::updateData()
         connect(btn, &QPushButton::toggled, this, [this, agent](bool checked) {
             emit agentToggled(m_skillId, agent.id, checked);
         });
+
+        // Agent 按钮右键菜单：打开该 Agent 目录下的 skill 副本文件夹
+        btn->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(btn, &QPushButton::customContextMenuRequested, this, [this, agent](const QPoint &pos) {
+            QMenu menu;
+            QAction *openAction = menu.addAction("打开 Skill 文件夹");
+            connect(openAction, &QAction::triggered, this, [this, agent]() {
+                emit agentFolderRequested(m_skillId, agent.id);
+            });
+            QWidget *w = qobject_cast<QWidget*>(sender());
+            if (w) menu.exec(w->mapToGlobal(pos));
+        });
+
         m_agentsLayout->addWidget(btn);
     }
 }
@@ -371,8 +384,9 @@ void SkillCard::setLargeMode(bool large)
     if (m_largeMode != large) {
         m_largeMode = large;
         applyStyle();
-        updateData();
+        // 先重建布局，再设文本 — 确保 QLabel 在布局中计算 word-wrap
         arrangeLayout();
+        updateData();
 
         if (!m_largeMode) {
             m_descLabel->hide();
@@ -404,18 +418,16 @@ void SkillCard::setChecked(bool checked)
 
 bool SkillCard::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::MouseButtonPress) {
+    if (event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent *me = static_cast<QMouseEvent*>(event);
         if (me->button() == Qt::LeftButton) {
-            // 检查点击的是否是按钮或复选框（这些需要保留原始行为）
             QWidget *w = qobject_cast<QWidget*>(obj);
             if (w && (dynamic_cast<QAbstractButton*>(w))) {
-                // 按钮点击：让按钮正常处理
                 return false;
             }
             qInfo() << "SkillCard eventFilter: emitting cardClicked" << m_skillId;
             emit cardClicked(m_skillId);
-            return true;  // 拦截事件
+            return true;
         }
     }
     return QWidget::eventFilter(obj, event);
@@ -423,7 +435,7 @@ bool SkillCard::eventFilter(QObject *obj, QEvent *event)
 
 bool SkillCard::event(QEvent *event)
 {
-    if (event->type() == QEvent::MouseButtonPress) {
+    if (event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent *me = static_cast<QMouseEvent*>(event);
         if (me->button() == Qt::LeftButton) {
             QWidget *child = childAt(me->pos());
@@ -434,7 +446,7 @@ bool SkillCard::event(QEvent *event)
                 showFrequencyMenu();
                 return true;
             }
-            qInfo() << "Card clicked:" << m_name << "ID=" << m_skillId;
+            qInfo() << "Card double-clicked:" << m_name << "ID=" << m_skillId;
             emit cardClicked(m_skillId);
             return true;
         }
@@ -462,6 +474,14 @@ void SkillCard::contextMenuEvent(QContextMenuEvent *event)
             });
         }
     }
+
+    menu.addSeparator();
+
+    // 打开文件夹
+    QAction *openFolderAction = menu.addAction("打开文件夹");
+    connect(openFolderAction, &QAction::triggered, this, [this]() {
+        emit openFolderRequested(m_skillId);
+    });
 
     menu.addSeparator();
 

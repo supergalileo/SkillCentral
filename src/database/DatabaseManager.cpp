@@ -1060,7 +1060,7 @@ QVector<int> DatabaseManager::validateSkills()
         int id = query.value(0).toInt();
         QString path = query.value(1).toString();
 
-        if (!QFile::exists(path)) {
+        if (path.isEmpty() || !QFile::exists(path)) {
             invalidIds << id;
         }
     }

@@ -23,6 +23,11 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QFutureWatcher>
+#include <QTimer>
+#include <QDesktopServices>
+#include <QUrl>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -65,35 +70,29 @@ void MainWindow::setDatabaseManager(DatabaseManager *dbManager)
     QVector<SkillInfo> existing = m_dbManager->getAllSkills();
     if (existing.isEmpty()) {
         createTestData();
-    } else {
+    }
+
+    // 扫描 agent 路径（在 show() 之前完成，避免画面闪烁）
+    if (m_agentManager) {
+        bool autoScan = m_dbManager->getSetting("autoScan", "true") == "true";
+        if (autoScan) {
+            qInfo() << "Startup scan starting...";
+            m_agentManager->scanAllAgents();
+            qInfo() << "Startup scan done";
+        }
+    }
+
+    // 清理旧的 theme 设置
+    if (m_dbManager) {
+        m_dbManager->setSetting("theme", "浅色");
+    }
+
+    // 在 show() 之后通过 timer 加载 UI，确保布局已就绪
+    QTimer::singleShot(0, this, [this]() {
         loadSkills();
         loadTags();
         loadAgents();
-    }
-
-    // 启动时自动扫描 agent 路径（安全调用，失败不崩溃）
-    if (m_agentManager) {
-        bool autoScan = true;
-        if (m_dbManager) {
-            autoScan = m_dbManager->getSetting("autoScan", "true") == "true";
-        }
-        if (autoScan) {
-            QTimer::singleShot(500, this, [this]() {
-                if (m_agentManager) {
-                    qInfo() << "Startup scan starting...";
-                    m_agentManager->scanAllAgents();
-                    qInfo() << "Startup scan done, reloading skills...";
-                    loadSkills();
-                }
-            });
-        }
-    }
-
-    // 应用已保存的主题
-    if (m_dbManager) {
-        QString theme = m_dbManager->getSetting("theme", "浅色");
-        applyTheme(theme == "深色" ? "dark" : "light");
-    }
+    });
 }
 
 void MainWindow::setupUi()
@@ -146,10 +145,10 @@ void MainWindow::setupUi()
     connect(m_selectAllCheck, &QCheckBox::toggled, this, &MainWindow::onSelectAllClicked);
     toolbarLayout->addWidget(m_selectAllCheck);
 
-    m_batchEnableBtn = new QPushButton("批量启用▼", this);
-    m_batchDisableBtn = new QPushButton("批量禁用", this);
-    m_batchDeleteBtn = new QPushButton("批量删除", this);
-    m_batchTagBtn = new QPushButton("批量打标签", this);
+    m_batchEnableBtn = new QPushButton("启用▼", this);
+    m_batchDisableBtn = new QPushButton("禁用", this);
+    m_batchDeleteBtn = new QPushButton("删除", this);
+    m_batchTagBtn = new QPushButton("打标签", this);
 
     connect(m_batchEnableBtn, &QPushButton::clicked, this, &MainWindow::onBatchEnableClicked);
     connect(m_batchDisableBtn, &QPushButton::clicked, this, &MainWindow::onBatchDisableClicked);
@@ -193,13 +192,14 @@ void MainWindow::setupUi()
 
     // ===== 频率筛选栏 =====
     QWidget *freqWidget = new QWidget(this);
-    freqWidget->setStyleSheet("background-color: #f8f9fa; border-bottom: 1px solid #e0e0e0; padding: 6px;");
+    freqWidget->setObjectName("freqBar");
+    freqWidget->setStyleSheet("#freqBar { background-color: #f8f9fa; border-bottom: 1px solid #e0e0e0; padding: 6px; }");
     QHBoxLayout *freqLayout = new QHBoxLayout(freqWidget);
     freqLayout->setContentsMargins(8, 4, 8, 4);
     freqLayout->setSpacing(6);
 
     QLabel *freqLabel = new QLabel("频率筛选：", freqWidget);
-    freqLabel->setStyleSheet("color: #666; font-size: 12px;");
+    freqLabel->setStyleSheet("font-size: 12px;");
     freqLayout->addWidget(freqLabel);
 
     QStringList freqNames = {"常用", "一般", "很少", "废弃"};
@@ -248,6 +248,22 @@ void MainWindow::setupUi()
     connect(m_cardWidget, &CardWidget::tagAddRequested, this, &MainWindow::onCardTagAddRequested);
     connect(m_cardWidget, &CardWidget::tagRemoveRequested, this, &MainWindow::onCardTagRemoveRequested);
     connect(m_cardWidget, &CardWidget::deleteRequested, this, &MainWindow::onCardDeleteRequested);
+    connect(m_cardWidget, &CardWidget::openFolderRequested, this, [this](int skillId) {
+        if (!m_dbManager) return;
+        SkillInfo skill = m_dbManager->getSkill(skillId);
+        if (skill.id == -1 || skill.path.isEmpty()) return;
+        QDesktopServices::openUrl(QUrl::fromLocalFile(skill.path));
+    });
+    connect(m_cardWidget, &CardWidget::agentFolderRequested, this, [this](int skillId, int agentId) {
+        if (!m_dbManager) return;
+        SkillInfo skill = m_dbManager->getSkill(skillId);
+        AgentInfo agent = m_dbManager->getAgent(agentId);
+        if (skill.id == -1 || agent.id == -1 || agent.path.isEmpty()) return;
+        QString folderName = QFileInfo(skill.path).fileName();
+        if (folderName.isEmpty()) folderName = skill.name;
+        QString agentSkillPath = QDir::cleanPath(agent.path + "/" + folderName);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(agentSkillPath));
+    });
 
     mainLayout->addWidget(m_cardScrollArea, 1);
 
@@ -305,10 +321,8 @@ void MainWindow::onTagClicked(const QString &tag)
 
 void MainWindow::onSelectAllClicked()
 {
-    // 实现全选/取消全选
     bool checked = m_selectAllCheck->isChecked();
-    // 这里需要 CardWidget 提供全选接口
-    // 暂时通过遍历卡片实现
+    m_cardWidget->selectAll(checked);
     updateStatus();
 }
 
@@ -565,9 +579,6 @@ void MainWindow::onRequestSettings()
         loadSkills();
     });
 
-    // 连接主题切换信号
-    connect(&dialog, &SettingsDialog::themeChanged, this, &MainWindow::applyTheme);
-
     dialog.exec();
 }
 
@@ -590,65 +601,110 @@ void MainWindow::onAddSkillClicked()
         return;
     }
 
-    QString folderPath = QFileDialog::getExistingDirectory(this,
-        "选择 Skill 文件夹（包含 SKILL.md）",
-        QDir::homePath(),
-        QFileDialog::ShowDirsOnly);
+    QStringList methods = {"从文件夹导入", "从 GitHub 链接导入"};
+    bool ok;
+    QString method = QInputDialog::getItem(this, "添加 Skill", "选择导入方式：",
+        methods, 0, false, &ok);
+    if (!ok) return;
 
-    if (folderPath.isEmpty()) {
-        return;
-    }
+    if (method == "从文件夹导入") {
+        // ===== 从文件夹导入 =====
+        QString folderPath = QFileDialog::getExistingDirectory(this,
+            "选择 Skill 文件夹（包含 SKILL.md）",
+            QDir::homePath(),
+            QFileDialog::ShowDirsOnly);
 
-    // 检查 SKILL.md 是否存在
-    QString skillMdPath = QDir::cleanPath(folderPath + "/SKILL.md");
-    if (!QFile::exists(skillMdPath)) {
-        QMessageBox::warning(this, "导入失败",
-            "导入失败，请确认文件夹中包含 SKILL.md 文件");
-        return;
-    }
-
-    // 获取文件夹名作为 skill 名称
-    QFileInfo folderInfo(folderPath);
-    QString skillName = folderInfo.fileName();
-
-    // 检查重复
-    if (m_skillManager->checkDuplicate(skillName)) {
-        QStringList options;
-        options << "覆盖" << "重命名" << "取消";
-        bool ok;
-        QString choice = QInputDialog::getItem(this, "Skill 已存在",
-            QString("名为「%1」的 skill 已存在，请选择操作：").arg(skillName),
-            options, 0, false, &ok);
-
-        if (!ok || choice == "取消") {
+        if (folderPath.isEmpty()) {
             return;
         }
-        if (choice == "覆盖") {
-            // 覆盖模式：importFromFolder 会删除旧的再导入
-            int skillId = m_skillManager->importFromFolder(folderPath, true);
-            if (skillId == -1) {
-                QMessageBox::warning(this, "导入失败", "导入失败，请确认文件夹中包含 SKILL.md 文件");
+
+        // 检查 SKILL.md 是否存在
+        QString skillMdPath = QDir::cleanPath(folderPath + "/SKILL.md");
+        if (!QFile::exists(skillMdPath)) {
+            QMessageBox::warning(this, "导入失败",
+                "导入失败，请确认文件夹中包含 SKILL.md 文件");
+            return;
+        }
+
+        // 获取文件夹名作为 skill 名称
+        QFileInfo folderInfo(folderPath);
+        QString skillName = folderInfo.fileName();
+
+        // 检查重复
+        if (m_skillManager->checkDuplicate(skillName)) {
+            QStringList options;
+            options << "覆盖" << "重命名" << "取消";
+            bool ok2;
+            QString choice = QInputDialog::getItem(this, "Skill 已存在",
+                QString("名为「%1」的 skill 已存在，请选择操作：").arg(skillName),
+                options, 0, false, &ok2);
+
+            if (!ok2 || choice == "取消") {
                 return;
             }
-            QMessageBox::information(this, "成功", QString("Skill 已覆盖导入！ID: %1").arg(skillId));
-            loadSkills();
-            loadTags();
+            if (choice == "覆盖") {
+                int skillId = m_skillManager->importFromFolder(folderPath, true);
+                if (skillId == -1) {
+                    QMessageBox::warning(this, "导入失败", "导入失败，请确认文件夹中包含 SKILL.md 文件");
+                    return;
+                }
+                QMessageBox::information(this, "成功", QString("Skill 已覆盖导入！ID: %1").arg(skillId));
+                loadSkills();
+                loadTags();
+                return;
+            }
+        }
+
+        // 正常导入
+        int skillId = m_skillManager->importFromFolder(folderPath);
+
+        if (skillId == -1) {
+            QMessageBox::warning(this, "导入失败",
+                "导入失败，请确认文件夹中包含 SKILL.md 文件");
             return;
         }
-        // 重命名：继续下面的流程，importFromFolder 内部自动处理
+
+        QMessageBox::information(this, "成功",
+            QString("Skill 已成功导入！ID: %1").arg(skillId));
+    } else {
+        // ===== 从 GitHub 链接导入（异步，防止卡 UI）=====
+        QString url = QInputDialog::getText(this, "从 GitHub 导入",
+            "输入 GitHub 仓库 URL：", QLineEdit::Normal,
+            "https://github.com/", &ok);
+        if (!ok || url.trimmed().isEmpty()) return;
+
+        QString trimmedUrl = url.trimmed();
+
+        // 禁用添加菜单项，避免重复操作
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        m_statusLabel->setText("正在从 GitHub 导入，请稍候...");
+
+        QFutureWatcher<int> *watcher = new QFutureWatcher<int>(this);
+        connect(watcher, &QFutureWatcher<int>::finished, this, [this, watcher]() {
+            QApplication::restoreOverrideCursor();
+            int skillId = watcher->result();
+            watcher->deleteLater();
+
+            if (skillId == -1) {
+                QMessageBox::warning(this, "导入失败",
+                    "从 GitHub 导入失败，请检查 URL 是否正确，"
+                    "以及网络连接是否正常。");
+            } else {
+                QMessageBox::information(this, "成功",
+                    QString("Skill 已成功从 GitHub 导入！ID: %1").arg(skillId));
+            }
+
+            loadSkills();
+            loadTags();
+            m_statusLabel->setText(QString("共 %1 个 skill").arg(m_allSkills.size()));
+        });
+
+        SkillManager *skillManager = m_skillManager; // 捕获指针
+        watcher->setFuture(QtConcurrent::run([skillManager, trimmedUrl]() {
+            return skillManager->importFromGitHub(trimmedUrl);
+        }));
+        return; // 异步导入，watcher 完成时会自动 reload
     }
-
-    // 正常导入
-    int skillId = m_skillManager->importFromFolder(folderPath);
-
-    if (skillId == -1) {
-        QMessageBox::warning(this, "导入失败",
-            "导入失败，请确认文件夹中包含 SKILL.md 文件");
-        return;
-    }
-
-    QMessageBox::information(this, "成功",
-        QString("Skill 已成功导入！ID: %1").arg(skillId));
 
     loadSkills();
     loadTags();
@@ -919,6 +975,12 @@ void MainWindow::createTestData()
         return;
     }
 
+    // 创建测试 skill 目录（确保路径存在，避免 validateSkills 误删）
+    QStringList testSkills = {"web-access", "academic-paper", "huashu-design", "deep-research", "pdf"};
+    for (const QString &name : testSkills) {
+        QDir().mkpath("D:/skillLibrary/skills/" + name);
+    }
+
     // 创建测试 skill
     int id1 = m_dbManager->addSkill("web-access", "D:/skillLibrary/skills/web-access", "联网搜索与网页抓取");
     int id2 = m_dbManager->addSkill("academic-paper", "D:/skillLibrary/skills/academic-paper", "学术论文写作");
@@ -950,17 +1012,10 @@ void MainWindow::loadSkills()
         return;
     }
 
-    // 自动清理孤儿记录（数据库有记录但文件夹不存在）
-    QVector<int> invalidIds = m_dbManager->validateSkills();
-    for (int id : invalidIds) {
-        qInfo() << "Removing orphan skill record, id=" << id;
-        m_dbManager->deleteSkill(id);
-    }
-    if (!invalidIds.isEmpty()) {
-        qInfo() << "Cleaned up" << invalidIds.size() << "orphan skill records";
-    }
-
+    // 暂不清理孤儿记录（避免误删测试数据）
+    // 后续通过扫描 agent 目录自动修复
     m_allSkills = m_dbManager->getAllSkills("frequency");
+
     m_cardWidget->setSkills(m_allSkills);
 
     // 传递 agent 列表给卡片
@@ -1075,47 +1130,4 @@ void MainWindow::dropEvent(QDropEvent *event)
     m_statusLabel->setText(QString("拖拽导入完成，共导入 %1 个 skill").arg(imported));
 }
 
-// ============================================================================
-// 主题
-// ============================================================================
-
-void MainWindow::applyTheme(const QString &theme)
-{
-    if (theme == "dark") {
-        QString darkSheet =
-            "QMainWindow { background-color: #2b2b2b; }"
-            "QWidget { background-color: #2b2b2b; color: #e0e0e0; }"
-            "SkillCard { background-color: #3c3c3c; border: 1px solid #555555; }"
-            "SkillCard:hover { border: 1px solid #4a90d9; }"
-            "QLineEdit { background-color: #3c3c3c; border: 1px solid #555555; "
-            "  padding: 6px 10px; border-radius: 6px; color: #e0e0e0; }"
-            "QPushButton { background-color: #3c3c3c; color: #e0e0e0; "
-            "  border: 1px solid #555555; border-radius: 4px; padding: 4px 12px; }"
-            "QPushButton:hover { background-color: #505050; }"
-            "QPushButton:checked { background-color: #4a90d9; color: white; }"
-            "QScrollArea { background-color: #2b2b2b; border: 1px solid #555555; }"
-            "QTextBrowser { background-color: #3c3c3c; color: #e0e0e0; "
-            "  border: 1px solid #555555; }"
-            "QLabel { color: #e0e0e0; }"
-            "QGroupBox { color: #e0e0e0; border: 1px solid #555555; }"
-            "QTableWidget { background-color: #3c3c3c; color: #e0e0e0; "
-            "  gridline-color: #555555; }"
-            "QTableWidget::item { color: #e0e0e0; }"
-            "QListWidget { background-color: #3c3c3c; color: #e0e0e0; }"
-            "QComboBox { background-color: #3c3c3c; color: #e0e0e0; "
-            "  border: 1px solid #555555; padding: 4px; }"
-            "QMenuBar { background-color: #2b2b2b; color: #e0e0e0; }"
-            "QMenu { background-color: #3c3c3c; color: #e0e0e0; }"
-            "QMenu::item:selected { background-color: #4a90d9; }"
-            "QStatusBar { color: #e0e0e0; }"
-            "QCheckBox { color: #e0e0e0; }"
-            "QTabWidget::pane { background-color: #2b2b2b; }"
-            "QTabBar::tab { background-color: #3c3c3c; color: #e0e0e0; "
-            "  padding: 6px 12px; }"
-            "QTabBar::tab:selected { background-color: #4a90d9; }";
-        qApp->setStyleSheet(darkSheet);
-    } else {
-        // 浅色主题：清除样式表
-        qApp->setStyleSheet("");
-    }
-}
+// 主题功能已移除，仅保留浅色模式

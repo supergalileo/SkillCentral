@@ -41,6 +41,8 @@ signals:
     void tagAddRequested(int skillId);
     void tagRemoveRequested(int skillId, const QString &tag);
     void deleteRequested(int skillId);
+    void openFolderRequested(int skillId);
+    void agentFolderRequested(int skillId, int agentId);
 
 protected:
     bool event(QEvent *event) override;

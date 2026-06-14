@@ -50,7 +50,7 @@ signals:
     void requestBackup();
 
 public slots:
-    void applyTheme(const QString &theme);
+    // applyTheme（已移除深色模式）
 
 private slots:
     void onSearchTextChanged(const QString &text);
