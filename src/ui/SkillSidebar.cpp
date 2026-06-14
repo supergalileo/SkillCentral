@@ -26,8 +26,23 @@ SkillSidebar::SkillSidebar(QWidget *parent)
     , m_animation(nullptr)
     , m_overlay(nullptr)
     , m_sidebarWidth(0)
+    , m_topBar(nullptr)
+    , m_closeButton(nullptr)
+    , m_titleLabel(nullptr)
+    , m_scrollArea(nullptr)
+    , m_contentWidget(nullptr)
+    , m_descLabel(nullptr)
+    , m_contentBrowser(nullptr)
+    , m_tagsWidget(nullptr)
+    , m_agentsWidget(nullptr)
+    , m_editButton(nullptr)
+    , m_deleteButton(nullptr)
+    , m_exportButton(nullptr)
 {
     setupUi();
+    if (parentWidget()) {
+        parentWidget()->installEventFilter(this);
+    }
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet("SkillSidebar { background-color: white; border-left: 1px solid #e0e0e0; }");
     hide();
@@ -175,54 +190,11 @@ void SkillSidebar::setupUi()
     
     m_topBar = createTopBar();
     mainLayout->addWidget(m_topBar);
-    
-    // 滚动区域
-    m_scrollArea = new QScrollArea(this);
-    m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setStyleSheet("QScrollArea { border: none; }");
-    
-    m_contentWidget = new QWidget(m_scrollArea);
-    m_contentWidget->setStyleSheet("background-color: white;");
-    
-    QVBoxLayout *contentLayout = new QVBoxLayout(m_contentWidget);
-    contentLayout->setContentsMargins(16, 16, 16, 16);
-    contentLayout->setSpacing(16);
-    
-    // 描述区域
-    contentLayout->addWidget(createDescriptionArea());
-    
-    QFrame *line1 = new QFrame(m_contentWidget);
-    line1->setFrameShape(QFrame::HLine);
-    line1->setStyleSheet("color: #e0e0e0;");
-    contentLayout->addWidget(line1);
-    
-    // SKILL.md 内容区域
-    contentLayout->addWidget(createContentArea());
-    
-    QFrame *line2 = new QFrame(m_contentWidget);
-    line2->setFrameShape(QFrame::HLine);
-    line2->setStyleSheet("color: #e0e0e0;");
-    contentLayout->addWidget(line2);
-    
-    // 标签区域
-    contentLayout->addWidget(createTagsArea());
-    
-    QFrame *line3 = new QFrame(m_contentWidget);
-    line3->setFrameShape(QFrame::HLine);
-    line3->setStyleSheet("color: #e0e0e0;");
-    contentLayout->addWidget(line3);
-    
-    // Agent 区域
-    contentLayout->addWidget(createAgentsArea());
-    
-    contentLayout->addStretch();
-    
-    m_scrollArea->setWidget(m_contentWidget);
-    mainLayout->addWidget(m_scrollArea, 1);
-    
-    // 底部按钮区域
-    mainLayout->addWidget(createButtonArea());
+
+    m_contentBrowser = new QTextBrowser(this);
+    m_contentBrowser->setOpenExternalLinks(true);
+    m_contentBrowser->setStyleSheet("QTextBrowser { border: none; padding: 16px; background-color: #fafafa; }");
+    mainLayout->addWidget(m_contentBrowser, 1);
 }
 
 void SkillSidebar::updateUi()
@@ -230,15 +202,7 @@ void SkillSidebar::updateUi()
     if (m_currentSkillId <= 0) {
         return;
     }
-    
-    // 更新标题
-    m_titleLabel->setText(m_currentSkill.name);
-    
-    // 更新描述
-    m_descLabel->setText(m_currentSkill.description);
-    m_descLabel->setVisible(!m_currentSkill.description.isEmpty());
-    
-    // 更新 SKILL.md 内容
+
     QString skillMdPath = "";
     // 从 Skill 对象获取 SKILL.md 路径。
     if (!m_currentSkill.path.isEmpty()) {
@@ -257,12 +221,6 @@ void SkillSidebar::updateUi()
     } else {
         m_contentBrowser->setHtml("<p style='color:#999;'>未设置 skill 路径</p>");
     }
-    
-    // 更新标签
-    updateTagsArea();
-    
-    // 更新 Agent 列表
-    updateAgentsArea();
 }
 
 void SkillSidebar::updateTagsArea()
@@ -354,10 +312,7 @@ QWidget* SkillSidebar::createTopBar()
     connect(m_closeButton, &QPushButton::clicked, this, &SkillSidebar::onCloseClicked);
     layout->addWidget(m_closeButton);
     
-    // 标题
-    m_titleLabel = new QLabel(widget);
-    m_titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #333; max-width: 300px;");
-    layout->addWidget(m_titleLabel, 1);
+    layout->addStretch();
     
     return widget;
 }
@@ -545,5 +500,18 @@ bool SkillSidebar::eventFilter(QObject *watched, QEvent *event)
         close();
         return true;
     }
+
+    if (watched == parentWidget() && event->type() == QEvent::Resize && isVisible()) {
+        QRect parentRect = parentWidget()->rect();
+        int width = m_isOpen ? SIDEBAR_WIDTH : m_sidebarWidth;
+        if (width > 0) {
+            m_sidebarWidth = width;
+            setGeometry(parentRect.width() - width, 0, width, parentRect.height());
+        }
+        if (m_overlay) {
+            m_overlay->setGeometry(parentRect);
+        }
+    }
+
     return QWidget::eventFilter(watched, event);
 }
